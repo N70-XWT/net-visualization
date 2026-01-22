@@ -6,7 +6,7 @@ import logo from './logo.svg';
 import './App.css';
 
 // 从 'react' 包导入 React（这是必须的，尤其是在使用 JSX 的文件里）。
-import React from 'react';
+import React, { useState } from 'react';
 
 // 从 react-leaflet 包导入需要的组件：MapContainer（地图容器）、TileLayer（地图底图）、Marker（标记）、Popup（弹出信息框）、Polyline（折线）。
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
@@ -16,6 +16,9 @@ import 'leaflet/dist/leaflet.css';
 
 // 导入 Leaflet 的 JS 库到变量 L。如果需要使用 Leaflet 原生 API（例如创建自定义图标），可以通过 L 来访问。
 import L from 'leaflet';
+
+// 导入自定义的 NodeList 组件
+import NodeList from './NodeList';
 
 // 定义一个名为 App 的函数组件，这是 React 推荐的一种写组件的方法（函数组件）。
 function App() {
@@ -33,18 +36,31 @@ function App() {
   ];
 
   // 组件的返回值是 JSX（看起来像 HTML，但可以在 JavaScript 中使用），它描述了组件的 UI。
-  return (
-    // 外层 div 使用 className（在 React 中用 className 替代 HTML 的 class），用来应用 CSS 中的 .App 样式。
-    <div className="App">
-      {/* 一个标题 */}
-      <h2>网络态势可视化系统（原型）</h2>
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-      {/* MapContainer：react-leaflet 提供的地图容器组件
-          - center：地图中心点，数组 [纬度, 经度]
-          - zoom：初始缩放级别
-          - className：用于绑定 CSS 样式（例如设置高度、宽度）
-      */}
-      <MapContainer center={[39.9, 116.4]} zoom={13} className="map">
+  return (
+    // 外层 div 使用 className `App`，并在内部横向布局：左侧侧栏、右侧内容
+    <div className="App">
+      <div className={"sidebar" + (sidebarCollapsed ? ' collapsed' : '')}>
+        <div className="node-list-root">
+          <NodeList
+            nodes={nodes}
+            collapsed={sidebarCollapsed}
+            onToggle={(v) => setSidebarCollapsed(!!v)}
+          />
+        </div>
+      </div>
+
+      <div className="content">
+        {/* 标题放在右侧内容区域 */}
+        <h2 style={{ margin: '6px 0' }}>网络态势可视化系统（原型）</h2>
+
+        {/* MapContainer：react-leaflet 提供的地图容器组件
+            - center：地图中心点，数组 [纬度, 经度]
+            - zoom：初始缩放级别
+            - className：用于绑定 CSS 样式（例如设置高度、宽度）
+        */}
+        <MapContainer center={[39.9, 116.4]} zoom={13} className="map">
         {/* TileLayer：地图瓦片图层（底图），这里使用 OpenStreetMap 的公共瓦片服务 */}
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -77,7 +93,8 @@ function App() {
             weight={2}
           />
         ))}
-      </MapContainer>
+        </MapContainer>
+      </div>
     </div>
   );
 }
