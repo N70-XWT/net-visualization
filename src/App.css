@@ -1,75 +1,15 @@
 .App {
-  /* 设置 .App 容器内的文本水平居中 */
-  text-align: center;
-  /* 设置默认字体为微软雅黑，备选为 sans-serif */
-  font-family: "Microsoft YaHei", sans-serif;
+  @apply flex min-h-screen w-full;
 }
 
-h2 {
-  /* 标题的上下外边距为 10px，左右为 0 */
-  margin: 10px 0;
-  /* 深灰色文本颜色 */
-  color: #333;
+.leaflet-container {
+  font-family: inherit;
 }
 
-.map {
-  /* 地图高度为视窗高度的 80%（vh 单位） */
-  height: 80vh;
-  /* 宽度占父容器的 90% */
-  width: 90%;
-  /* 上下外边距 0，左右自动居中 */
-  margin: 0 auto;
-  /* 圆角边框 10px */
-  border-radius: 10px;
-  /* 盒子阴影，使地图浮于背景之上 */
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
-}
-
-.App-logo {
-  /* logo 高度为视窗较小边的 40%（vmin 单位） */
-  height: 40vmin;
-  /* 禁止该元素响应鼠标事件（例如点击、悬停） */
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  /* 媒体查询：当用户没有偏好减少动画时，启用动画 */
-  .App-logo {
-    /* animation 属性：使用名为 App-logo-spin 的关键帧动画，持续 20s，无限循环，线性运动 */
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
-.App-header {
-  /* 头部背景色 */
-  background-color: #282c34;
-  /* 最小高度占满视窗高度 */
-  min-height: 100vh;
-  /* 使用 Flexbox 布局 */
-  display: flex;
-  /* 主轴方向为列（垂直排列子元素） */
-  flex-direction: column;
-  /* 交叉轴（水平）居中对齐子元素 */
-  align-items: center;
-  /* 主轴（垂直）居中对齐子元素 */
-  justify-content: center;
-  /* 字体大小根据视窗动态计算：10px + 2vmin */
-  font-size: calc(10px + 2vmin);
-  /* 文字颜色为白色 */
-  color: white;
-}
-
-.App-link {
-  /* 链接颜色，常见于 React 示例 */
-  color: #61dafb;
-}
-
-@keyframes App-logo-spin {
-  /* 定义名为 App-logo-spin 的关键帧动画，从 0 到 360 度旋转 */
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  backdrop-filter: blur(12px);
+  background: rgba(8, 24, 48, 0.8);
+  border: 1px solid rgba(94, 247, 193, 0.25);
+  color: #e2f7ff;
 }
