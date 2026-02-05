@@ -2,10 +2,10 @@
 import './App.css';
 
 // 从 'react' 包导入 React（这是必须的，尤其是在使用 JSX 的文件里）。
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 // 从 react-leaflet 包导入需要的组件：MapContainer（地图容器）、TileLayer（地图底图）、Marker（标记）、Popup（弹出信息框）、Polyline（折线）。
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
 
 // 导入 leaflet 的 CSS，这样 Leaflet 的默认样式（例如控件、弹窗样式）才会生效。
 import 'leaflet/dist/leaflet.css';
@@ -85,6 +85,62 @@ function App() {
 
   // 组件的返回值是 JSX（看起来像 HTML，但可以在 JavaScript 中使用），它描述了组件的 UI。
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [selectedNodeId, setSelectedNodeId] = useState(nodes[0]?.id || null);
+
+  const markerRefs = useRef({});
+
+  const mapRef = useRef(null);
+  const selectedNode = nodes.find((node) => node.id === selectedNodeId) || null;
+
+  function SelectedNodeController({ node }) {
+    const map = useMap();
+
+    useEffect(() => {
+      mapRef.current = map;
+    }, [map]);
+
+    useEffect(() => {
+      if (!node) {
+        return;
+      }
+
+      const marker = markerRefs.current[node.id];
+      const currentZoom = map.getZoom ? map.getZoom() : 13;
+      const targetZoom = Math.max(currentZoom, 15);
+
+      map.flyTo(node.position, targetZoom, {
+        duration: 0.8,
+        easeLinearity: 0.25,
+      });
+
+      let cleanupTimer = null;
+      const openPopup = () => {
+        const activeMarker = markerRefs.current[node.id];
+        if (activeMarker) {
+          activeMarker.openPopup();
+          activeMarker.setZIndexOffset(1000);
+        }
+      };
+
+      if (marker) {
+        cleanupTimer = setTimeout(openPopup, 400);
+      } else {
+        cleanupTimer = setTimeout(openPopup, 500);
+      }
+
+      return () => {
+        if (cleanupTimer) {
+          clearTimeout(cleanupTimer);
+        }
+        const activeMarker = markerRefs.current[node.id];
+        if (activeMarker) {
+          activeMarker.setZIndexOffset(0);
+        }
+      };
+    }, [map, node]);
+
+    return null;
+  }
 
   return (
     // 外层容器采用深色渐变背景与整体仪表盘布局
@@ -97,6 +153,8 @@ function App() {
           collapsed={sidebarCollapsed}
           onToggle={(v) => setSidebarCollapsed(!!v)}
           typeMeta={NODE_TYPE_META}
+          selectedNodeId={selectedNodeId}
+          onSelectNode={setSelectedNodeId}
         />
       </div>
 
@@ -118,6 +176,7 @@ function App() {
           zoom={13}
           className="h-[calc(100vh-220px)] min-h-[420px] w-full overflow-hidden rounded-3xl border border-white/10 bg-white/5 backdrop-blur-md shadow-soft-glow"
         >
+          <SelectedNodeController node={selectedNode} />
           {/* TileLayer：地图瓦片图层（底图），这里使用 OpenStreetMap 的公共瓦片服务 */}
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -129,7 +188,18 @@ function App() {
             const typeMeta = NODE_TYPE_META[node.type] || { label: node.type || '未知节点', color: '#7f7f7f' };
             return (
               // Marker 组件显示在地图上的一个点。React 要求列表中元素有唯一的 key，这里使用 node.id。
-              <Marker key={node.id} position={node.position} icon={getIconForType(node.type)}>
+              <Marker
+                key={node.id}
+                position={node.position}
+                icon={getIconForType(node.type)}
+                ref={(marker) => {
+                  if (marker) {
+                    markerRefs.current[node.id] = marker;
+                  } else {
+                    delete markerRefs.current[node.id];
+                  }
+                }}
+              >
                 {/* Popup 是 Marker 的子组件，用于显示当点击或打开时的弹窗内容 */}
                 <Popup>
                   {/* 在 Popup 中显示节点名称和层级信息。JSX 中花括号 {} 用于插入 JavaScript 表达式或变量 */}
