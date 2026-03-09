@@ -8,12 +8,49 @@
 
 .leaflet-marker-icon,
 .leaflet-marker-shadow {
-  transition: transform 0.9s linear;
+  transition: transform 0.9s linear, margin-top 0.45s ease, filter 0.45s ease;
 }
 
 .map-moving .leaflet-marker-icon,
 .map-moving .leaflet-marker-shadow {
   transition: none;
+}
+
+.map-mode-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  width: 140px;
+  padding: 4px;
+  border-radius: 9999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.map-mode-toggle span {
+  border-radius: 9999px;
+  padding: 4px 10px;
+  text-align: center;
+  letter-spacing: 0.12em;
+  color: rgba(226, 232, 240, 0.75);
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+.map-mode-toggle span.is-active {
+  background: rgba(20, 184, 166, 0.27);
+  color: #dcfdf7;
+}
+
+.map-view-3d .leaflet-tile-pane {
+  filter: saturate(1.08) contrast(1.03);
+}
+
+.map-view-3d .network-node-icon {
+  filter: drop-shadow(0 16px 18px rgba(3, 9, 21, 0.55));
+}
+
+.map-view-2d .network-node-icon {
+  filter: none;
 }
 
 .leaflet-popup-content-wrapper,
@@ -57,5 +94,17 @@
 @keyframes link-flow {
   to {
     stroke-dashoffset: -280;
+  }
+}
+
+@media (max-width: 768px) {
+  .map-mode-panel {
+    right: 12px;
+    top: 12px;
+    max-width: 170px;
+  }
+
+  .map-mode-toggle {
+    width: 100%;
   }
 }

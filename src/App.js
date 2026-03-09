@@ -15,6 +15,7 @@ import L from 'leaflet';
 
 // 导入自定义的 NodeList 组件
 import NodeList from './NodeList';
+import Map3DView from './Map3DView';
 
 import { topology } from './services/topologyModel';
 import { buildInitialNodeState } from './services/mockNodeStream';
@@ -82,6 +83,30 @@ function getNodePosition(node) {
     return null;
   }
   return [node.location.geo.lat, node.location.geo.lng];
+}
+
+function getNodeGeo(node) {
+  return node?.location?.geo || null;
+}
+
+function getAltitudeLiftPx(altitude) {
+  const safeAltitude = Number.isFinite(altitude) ? Math.max(0, altitude) : 0;
+  // 对数压缩高度量级，避免卫星高度造成视觉失真。
+  const normalized = Math.min(1, Math.log10(safeAltitude + 10) / 6);
+  return Math.round(normalized * 42);
+}
+
+function buildLinkArcPositions(fromPosition, toPosition, fromAltitude, toAltitude, is3dMode) {
+  if (!is3dMode) {
+    return [fromPosition, toPosition];
+  }
+
+  const averageLift = (getAltitudeLiftPx(fromAltitude) + getAltitudeLiftPx(toAltitude)) / 2;
+  const arcOffset = Math.min(0.0016, averageLift / 65000);
+  const midLat = (fromPosition[0] + toPosition[0]) / 2 + arcOffset;
+  const midLng = (fromPosition[1] + toPosition[1]) / 2;
+
+  return [fromPosition, [midLat, midLng], toPosition];
 }
 
 function getLinkStyle(link) {
@@ -222,6 +247,45 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState(baseNodes[0]?.id || null);
   const [focusRequestId, setFocusRequestId] = useState(null);
+  const [mapViewMode, setMapViewMode] = useState('2d');
+
+  const getDynamicNodeGeo = useCallback((nodeId) => {
+    const dynGeo = nodeStateRef.current[nodeId]?.location?.geo;
+    if (dynGeo) {
+      return dynGeo;
+    }
+    return getNodeGeo(nodeMapRef.current[nodeId]);
+  }, []);
+
+  const getDynamicNodePosition = useCallback((nodeId) => {
+    const geo = getDynamicNodeGeo(nodeId);
+    if (!geo) {
+      return null;
+    }
+    return [geo.lat, geo.lng];
+  }, [getDynamicNodeGeo]);
+
+  const getDynamicNodeAltitude = useCallback((nodeId) => {
+    return getDynamicNodeGeo(nodeId)?.altitude ?? 0;
+  }, [getDynamicNodeGeo]);
+
+  const applyMarkerAltitudeVisual = useCallback((marker, nodeId) => {
+    if (!marker) {
+      return;
+    }
+
+    const markerElement = marker.getElement?.();
+    if (!markerElement) {
+      return;
+    }
+
+    const altitude = getDynamicNodeAltitude(nodeId);
+    const liftPx = mapViewMode === '3d' ? getAltitudeLiftPx(altitude) : 0;
+    markerElement.style.marginTop = `${-liftPx}px`;
+
+    const selectedBoost = selectedNodeId === nodeId ? 220 : 0;
+    marker.setZIndexOffset(liftPx + selectedBoost);
+  }, [getDynamicNodeAltitude, mapViewMode, selectedNodeId]);
 
   useEffect(() => {
     nodeMapRef.current = buildNodeMap(baseNodes);
@@ -240,54 +304,53 @@ function App() {
       };
       currentState[update.id] = nextState;
 
-      // 直接操作 Leaflet Marker，调用原生 setLatLng() 和 setIcon()
       const marker = markerRefsById.current[update.id];
       if (!marker) {
         return;
       }
 
-      // 更新位置
       if (update.location?.geo) {
         const latLng = [update.location.geo.lat, update.location.geo.lng];
         marker.setLatLng(latLng);
       }
 
-      // 状态变化时更新图标（如在线/离线）
       if (update.state?.online !== undefined) {
         const baseNode = baseNodes.find((n) => n.id === update.id);
         if (baseNode) {
-          const icon = getIconForType(baseNode.type);
-          marker.setIcon(icon);
+          marker.setIcon(getIconForType(baseNode.type));
         }
       }
+
+      applyMarkerAltitudeVisual(marker, update.id);
     });
 
-    // 更新链路位置 - 遍历所有相关链路并更新其 Polyline 位置
-    const getDynamicNodePosition = (nodeId) => {
-      const dynState = currentState[nodeId];
-      if (dynState?.location?.geo) {
-        return [dynState.location.geo.lat, dynState.location.geo.lng];
-      }
-      const baseNode = nodeMapRef.current[nodeId];
-      return getNodePosition(baseNode);
-    };
-
-    topology.links.forEach((link) => {
+    links.forEach((link) => {
       const polylineRefs = linkPolylineRefsById.current[link.id];
-      if (!polylineRefs) return;
+      if (!polylineRefs) {
+        return;
+      }
 
       const fromPosition = getDynamicNodePosition(link.from);
       const toPosition = getDynamicNodePosition(link.to);
-      if (!fromPosition || !toPosition) return;
+      if (!fromPosition || !toPosition) {
+        return;
+      }
 
-      // 更新这条链路的所有 Polyline（健康线和流量线）
+      const linkPositions = buildLinkArcPositions(
+        fromPosition,
+        toPosition,
+        getDynamicNodeAltitude(link.from),
+        getDynamicNodeAltitude(link.to),
+        mapViewMode === '3d'
+      );
+
       polylineRefs.forEach((polyline) => {
         if (polyline && polyline.setLatLngs) {
-          polyline.setLatLngs([fromPosition, toPosition]);
+          polyline.setLatLngs(linkPositions);
         }
       });
     });
-  }, [baseNodes]);
+  }, [applyMarkerAltitudeVisual, baseNodes, getDynamicNodeAltitude, getDynamicNodePosition, links, mapViewMode]);
 
   const handleWebSocketData = useCallback((data) => {
     if (!data || !Array.isArray(data.nodes)) {
@@ -338,6 +401,43 @@ function App() {
   const handleFocusConsumed = useCallback(() => {
     setFocusRequestId(null);
   }, []);
+
+  const handleToggleMapViewMode = useCallback(() => {
+    setMapViewMode((prev) => (prev === '2d' ? '3d' : '2d'));
+  }, []);
+
+  useEffect(() => {
+    Object.entries(markerRefsById.current).forEach(([nodeId, marker]) => {
+      applyMarkerAltitudeVisual(marker, nodeId);
+    });
+
+    links.forEach((link) => {
+      const polylineRefs = linkPolylineRefsById.current[link.id];
+      if (!polylineRefs) {
+        return;
+      }
+
+      const fromPosition = getDynamicNodePosition(link.from);
+      const toPosition = getDynamicNodePosition(link.to);
+      if (!fromPosition || !toPosition) {
+        return;
+      }
+
+      const linkPositions = buildLinkArcPositions(
+        fromPosition,
+        toPosition,
+        getDynamicNodeAltitude(link.from),
+        getDynamicNodeAltitude(link.to),
+        mapViewMode === '3d'
+      );
+
+      polylineRefs.forEach((polyline) => {
+        if (polyline && polyline.setLatLngs) {
+          polyline.setLatLngs(linkPositions);
+        }
+      });
+    });
+  }, [applyMarkerAltitudeVisual, getDynamicNodeAltitude, getDynamicNodePosition, links, mapViewMode]);
 
   function MapMovementController() {
     const map = useMap();
@@ -462,6 +562,7 @@ function App() {
         ref={(marker) => {
           if (marker) {
             markerRefsById.current[node.id] = marker;
+            applyMarkerAltitudeVisual(marker, node.id);
           } else {
             delete markerRefsById.current[node.id];
           }
@@ -476,17 +577,7 @@ function App() {
         </Popup>
       </Marker>
     );
-  }), [baseNodes]);
-
-  // 获取节点的动态位置（优先使用 WebSocket 更新的位置，回退到基础位置）
-  const getDynamicNodePosition = (nodeId) => {
-    const dynState = nodeStateRef.current[nodeId];
-    if (dynState?.location?.geo) {
-      return [dynState.location.geo.lat, dynState.location.geo.lng];
-    }
-    const baseNode = nodeMapRef.current[nodeId];
-    return getNodePosition(baseNode);
-  };
+  }), [applyMarkerAltitudeVisual, baseNodes, handleSelectNode]);
 
   // 链路渲染使用动态位置，确保连线跟随节点实时更新
   // 为了让 Polyline 能被 ref 捕获，我们需要使用一个闭包技巧将 ref 回调传递给 Polyline 的 eventHandlers
@@ -497,6 +588,14 @@ function App() {
     if (!fromPosition || !toPosition) {
       return null;
     }
+
+    const linkPositions = buildLinkArcPositions(
+      fromPosition,
+      toPosition,
+      getDynamicNodeAltitude(link.from),
+      getDynamicNodeAltitude(link.to),
+      mapViewMode === '3d'
+    );
 
     const healthColor = getLinkHealthColor(link);
     const flowClass = `link-line link-line--flow ${getLinkFlowSpeedClass(link)}`;
@@ -528,7 +627,7 @@ function App() {
       <React.Fragment key={link.id}>
         <Polyline
           ref={healthLineRefCallback}
-          positions={[fromPosition, toPosition]}
+          positions={linkPositions}
           pathOptions={{
             ...getLinkStyle(link),
             color: healthColor,
@@ -538,7 +637,7 @@ function App() {
         />
         <Polyline
           ref={flowLineRefCallback}
-          positions={[fromPosition, toPosition]}
+          positions={linkPositions}
           pathOptions={{
             color: healthColor,
             weight: 3,
@@ -565,24 +664,51 @@ function App() {
         />
       </div>
 
-      <MapContainer
-        center={[39.9, 116.4]}
-        zoom={13}
-        className="absolute inset-0 h-full w-full z-0"
-      >
-        <MapMovementController />
-        <SelectedNodeController
-          nodeId={selectedNodeId}
-          focusId={focusRequestId}
-          onFocusHandled={handleFocusConsumed}
+      <div className="map-mode-panel absolute right-5 top-5 z-[1000] rounded-2xl border border-white/20 bg-[#07182fcc] p-3 text-xs text-slate-100 backdrop-blur-xl shadow-2xl">
+        <p className="tracking-[0.2em] uppercase text-[10px] text-cyan-200/90">Map View</p>
+        <button
+          type="button"
+          onClick={handleToggleMapViewMode}
+          className="map-mode-toggle mt-2"
+          aria-label="切换 2D / 3D 地图视图"
+        >
+          <span className={mapViewMode === '2d' ? 'is-active' : ''}>2D</span>
+          <span className={mapViewMode === '3d' ? 'is-active' : ''}>3D</span>
+        </button>
+        <p className="mt-2 text-[11px] text-slate-300/90">
+          {mapViewMode === '3d' ? '3D 视角：空天地节点按真实高度分层显示。' : '2D 模式：保持平面拓扑表现。'}
+        </p>
+      </div>
+
+      {mapViewMode === '2d' ? (
+        <MapContainer
+          center={[39.9, 116.4]}
+          zoom={13}
+          className="absolute inset-0 h-full w-full z-0"
+        >
+          <MapMovementController />
+          <SelectedNodeController
+            nodeId={selectedNodeId}
+            focusId={focusRequestId}
+            onFocusHandled={handleFocusConsumed}
+          />
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution="&copy; OpenStreetMap 贡献者"
+          />
+          {markerElements}
+          {linkElements}
+        </MapContainer>
+      ) : (
+        <Map3DView
+          nodes={baseNodes}
+          links={links}
+          nodeStateRef={nodeStateRef}
+          nodeMapRef={nodeMapRef}
+          selectedNodeId={selectedNodeId}
+          onSelectNode={handleSelectNode}
         />
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution="&copy; OpenStreetMap 贡献者"
-        />
-        {markerElements}
-        {linkElements}
-      </MapContainer>
+      )}
     </div>
   );
 }
