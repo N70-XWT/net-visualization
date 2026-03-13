@@ -1,39 +1,34 @@
-// 导入当前目录下的样式文件 `App.css`，在 React 项目中引入 CSS 会让这些样式作用于该组件及其子元素。
 import './App.css';
-
-// 从 'react' 包导入 React（这是必须的，尤其是在使用 JSX 的文件里）。
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-
-// 从 react-leaflet 包导入需要的组件：MapContainer（地图容器）、TileLayer（地图底图）、Marker（标记）、Popup（弹出信息框）、Polyline（折线）。
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
-
-// 导入 leaflet 的 CSS，这样 Leaflet 的默认样式（例如控件、弹窗样式）才会生效。
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-
-// 导入 Leaflet 的 JS 库到变量 L。如果需要使用 Leaflet 原生 API（例如创建自定义图标），可以通过 L 来访问。
 import L from 'leaflet';
 
-// 导入自定义的 NodeList 组件
 import NodeList from './NodeList';
 import Map3DView from './Map3DView';
 
-import { topology } from './services/topologyModel';
+import { mockTopology } from './services/mockTopologyData';
 import { buildInitialNodeState } from './services/mockNodeStream';
-import { useWebSocketTopology } from './hooks/useWebSocketTopology';
 
-// 导入矢量图标资源
 import groundStationIconUrl from './assets/icons/ground-station.svg';
 import uavIconUrl from './assets/icons/uav.svg';
 import groundUserIconUrl from './assets/icons/ground-user.svg';
 import satelliteIconUrl from './assets/icons/satellite.svg';
 
 const NODE_TYPE_META = {
-  router: { label: '路由器', color: '#1f78b4', icon: groundStationIconUrl },
-  'base-station': { label: '基站', color: '#f28e2b', icon: groundStationIconUrl },
-  'mesh-node': { label: '自组网节点', color: '#59a14f', icon: uavIconUrl },
-  terminal: { label: '终端', color: '#9467bd', icon: groundUserIconUrl },
-  satellite: { label: '卫星', color: '#7f7f7f', icon: satelliteIconUrl },
+  router: { label: 'Router', color: '#1f78b4', icon: groundStationIconUrl },
+  'base-station': { label: 'Base Station', color: '#f28e2b', icon: groundStationIconUrl },
+  'mesh-node': { label: 'Mesh Node', color: '#59a14f', icon: uavIconUrl },
+  terminal: { label: 'Terminal', color: '#9467bd', icon: groundUserIconUrl },
+  satellite: { label: 'Satellite', color: '#7f7f7f', icon: satelliteIconUrl },
 };
+
+const LAYER_OPTIONS = [
+  { key: 'backbone', label: 'Backbone' },
+  { key: 'access', label: 'Access' },
+  { key: 'mesh', label: 'Mesh' },
+  { key: 'edge', label: 'Edge' },
+];
 
 const ICON_CACHE = {};
 
@@ -48,7 +43,7 @@ function createLeafletIcon(meta) {
 }
 
 function createFallbackIcon() {
-  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="#7f7f7f" stroke="#ffffff" stroke-width="2"/><text x="18" y="22" text-anchor="middle" font-size="14" font-family="Arial, sans-serif" fill="#ffffff">节</text></svg>';
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="#7f7f7f" stroke="#ffffff" stroke-width="2"/><text x="18" y="22" text-anchor="middle" font-size="14" font-family="Arial, sans-serif" fill="#ffffff">N</text></svg>';
   return L.icon({
     iconUrl: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
     iconSize: [36, 36],
@@ -91,7 +86,6 @@ function getNodeGeo(node) {
 
 function getAltitudeLiftPx(altitude) {
   const safeAltitude = Number.isFinite(altitude) ? Math.max(0, altitude) : 0;
-  // 对数压缩高度量级，避免卫星高度造成视觉失真。
   const normalized = Math.min(1, Math.log10(safeAltitude + 10) / 6);
   return Math.round(normalized * 42);
 }
@@ -164,65 +158,32 @@ function getLinkFlowSpeedClass(link) {
   return 'link-flow--medium';
 }
 
-// 节点 Popup 内容组件，支持刷新按钮
 function NodePopupContent({ node, typeMeta, nodeStateRef }) {
-  const [refreshCount, setRefreshCount] = useState(0);
-
-  const handleRefresh = () => {
-    setRefreshCount((prev) => prev + 1);
-  };
-
   const getDynState = () => nodeStateRef.current[node.id];
 
   return (
     <div className="text-sm text-slate-900">
-      <div className="flex items-center justify-between">
-        <div className="text-base font-semibold text-slate-900">{node.name}</div>
-        <button
-          onClick={handleRefresh}
-          className="ml-2 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-          title="刷新数据"
-        >
-          🔄
-        </button>
-      </div>
+      <div className="text-base font-semibold text-slate-900">{node.name}</div>
       <div className="mt-2 space-y-1 text-slate-800">
-        <div>节点 ID：{node.id}</div>
-        <div>节点类型：{typeMeta.label}</div>
-        <div>层级：{node.layer || '-'}</div>
+        <div>Node ID: {node.id}</div>
+        <div>Type: {typeMeta.label}</div>
+        <div>Layer: {node.layer || '-'}</div>
         <div>
-          状态：
+          Status:{' '}
           {(() => {
             const dynState = getDynState();
             const online = dynState?.state?.online ?? node.state?.online;
             const status = dynState?.state?.status ?? node.state?.status ?? '-';
-            return `${online ? '在线' : '离线'} (${status})`;
+            return `${online ? 'online' : 'offline'} (${status})`;
           })()}
         </div>
         <div>
-          时间戳：
-          {(() => {
-            const dynState = getDynState();
-            const ts = dynState?.timestamp || node.state?.lastSeen || '-';
-            // 刷新计数变化时会重新渲染，从而获取最新时间戳
-            return `${ts}${refreshCount > 0 ? '' : ''}`;
-          })()}
-        </div>
-        <div>
-          位置：
+          Position:{' '}
           {(() => {
             const dynState = getDynState();
             const geo = dynState?.location?.geo || node.location?.geo;
             if (!geo) return '-';
             return `${geo.lat?.toFixed(5) ?? '-'}, ${geo.lng?.toFixed(5) ?? '-'}`;
-          })()}
-        </div>
-        <div>
-          高度：
-          {(() => {
-            const dynState = getDynState();
-            const geo = dynState?.location?.geo || node.location?.geo;
-            return geo?.altitude ?? '-';
           })()}
         </div>
       </div>
@@ -231,23 +192,59 @@ function NodePopupContent({ node, typeMeta, nodeStateRef }) {
 }
 
 function App() {
-  const baseNodes = useMemo(() => topology.nodes, []);
-  const links = topology.links;
+  const baseNodes = useMemo(() => mockTopology.nodes, []);
+  const links = useMemo(() => mockTopology.links, []);
+  const crossLayerRelations = useMemo(() => mockTopology.crossLayerRelations, []);
 
-  // 使用 useRef 保存 Marker 实例字典，避免关联任何 React 状态
   const markerRefsById = useRef({});
-  // 使用 useRef 保存链路 Polyline 实例字典，用于实时位置更新
   const linkPolylineRefsById = useRef({});
-  // 使用 useRef 保存动态节点状态，仅供查询，不触发重渲染
   const nodeStateRef = useRef(buildInitialNodeState(baseNodes));
 
   const mapRef = useRef(null);
   const nodeMapRef = useRef(buildNodeMap(baseNodes));
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [selectedNodeId, setSelectedNodeId] = useState(baseNodes[0]?.id || null);
+  const [selectedNodeId, setSelectedNodeId] = useState(null);
+  const [selectedLinkId, setSelectedLinkId] = useState(null);
   const [focusRequestId, setFocusRequestId] = useState(null);
   const [mapViewMode, setMapViewMode] = useState('2d');
+  const [searchInput, setSearchInput] = useState('');
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [enabledLayers, setEnabledLayers] = useState(() => LAYER_OPTIONS.map((item) => item.key));
+
+  const enabledLayerSet = useMemo(() => new Set(enabledLayers), [enabledLayers]);
+
+  const visibleNodes = useMemo(() => {
+    const keyword = searchKeyword.trim().toLowerCase();
+    return baseNodes.filter((node) => {
+      if (!enabledLayerSet.has(node.layer)) {
+        return false;
+      }
+      if (!keyword) {
+        return true;
+      }
+      return (
+        node.id.toLowerCase().includes(keyword) ||
+        (node.name || '').toLowerCase().includes(keyword)
+      );
+    });
+  }, [baseNodes, enabledLayerSet, searchKeyword]);
+
+  const visibleNodeSet = useMemo(
+    () => new Set(visibleNodes.map((node) => node.id)),
+    [visibleNodes]
+  );
+
+  const visibleLinks = useMemo(() => {
+    return links.filter((link) => {
+      return visibleNodeSet.has(link.from) && visibleNodeSet.has(link.to);
+    });
+  }, [links, visibleNodeSet]);
+
+  const selectedLink = useMemo(
+    () => visibleLinks.find((item) => item.id === selectedLinkId) || null,
+    [selectedLinkId, visibleLinks]
+  );
 
   const getDynamicNodeGeo = useCallback((nodeId) => {
     const dynGeo = nodeStateRef.current[nodeId]?.location?.geo;
@@ -291,92 +288,18 @@ function App() {
     nodeMapRef.current = buildNodeMap(baseNodes);
   }, [baseNodes]);
 
-  // 直接更新 Marker 位置和图标，无需触发 React 重渲染
-  const handleUpdateNodeStates = useCallback((updates) => {
-    const currentState = nodeStateRef.current;
-    updates.forEach((update) => {
-      const previous = currentState[update.id] || {};
-      const nextState = {
-        ...previous,
-        ...update,
-        location: update.location || previous.location,
-        state: update.state || previous.state,
-      };
-      currentState[update.id] = nextState;
-
-      const marker = markerRefsById.current[update.id];
-      if (!marker) {
-        return;
-      }
-
-      if (update.location?.geo) {
-        const latLng = [update.location.geo.lat, update.location.geo.lng];
-        marker.setLatLng(latLng);
-      }
-
-      if (update.state?.online !== undefined) {
-        const baseNode = baseNodes.find((n) => n.id === update.id);
-        if (baseNode) {
-          marker.setIcon(getIconForType(baseNode.type));
-        }
-      }
-
-      applyMarkerAltitudeVisual(marker, update.id);
-    });
-
-    links.forEach((link) => {
-      const polylineRefs = linkPolylineRefsById.current[link.id];
-      if (!polylineRefs) {
-        return;
-      }
-
-      const fromPosition = getDynamicNodePosition(link.from);
-      const toPosition = getDynamicNodePosition(link.to);
-      if (!fromPosition || !toPosition) {
-        return;
-      }
-
-      const linkPositions = buildLinkArcPositions(
-        fromPosition,
-        toPosition,
-        getDynamicNodeAltitude(link.from),
-        getDynamicNodeAltitude(link.to),
-        mapViewMode === '3d'
-      );
-
-      polylineRefs.forEach((polyline) => {
-        if (polyline && polyline.setLatLngs) {
-          polyline.setLatLngs(linkPositions);
-        }
-      });
-    });
-  }, [applyMarkerAltitudeVisual, baseNodes, getDynamicNodeAltitude, getDynamicNodePosition, links, mapViewMode]);
-
-  const handleWebSocketData = useCallback((data) => {
-    if (!data || !Array.isArray(data.nodes)) {
-      return;
+  useEffect(() => {
+    if (selectedNodeId && !visibleNodeSet.has(selectedNodeId)) {
+      setSelectedNodeId(null);
+      setFocusRequestId(null);
     }
+  }, [selectedNodeId, visibleNodeSet]);
 
-    const updates = data.nodes.map((node) => ({
-      id: node.id,
-      location: {
-        geo: {
-          lat: node.lat,
-          lng: node.lng,
-          altitude: node.altitude,
-        },
-      },
-      state: {
-        online: node.status !== 'offline',
-        status: node.status,
-      },
-      timestamp: new Date(data.timestamp).toISOString(),
-    }));
-
-    handleUpdateNodeStates(updates);
-  }, [handleUpdateNodeStates]);
-
-  useWebSocketTopology(handleWebSocketData, 'ws://localhost:8080');
+  useEffect(() => {
+    if (selectedLinkId && !visibleLinks.some((item) => item.id === selectedLinkId)) {
+      setSelectedLinkId(null);
+    }
+  }, [selectedLinkId, visibleLinks]);
 
   const handleToggleSidebar = useCallback((value) => {
     const nextCollapsed = !!value;
@@ -388,15 +311,45 @@ function App() {
   }, []);
 
   const handleSelectNode = useCallback((nodeId) => {
-    setSelectedNodeId((prev) => {
-      if (prev === nodeId) {
-        setFocusRequestId(null);
-        return null;
+    setSelectedNodeId(nodeId);
+    setFocusRequestId(nodeId);
+  }, []);
+
+  const handleLayerToggle = useCallback((layerKey) => {
+    setEnabledLayers((prev) => {
+      if (prev.includes(layerKey)) {
+        return prev.filter((item) => item !== layerKey);
       }
-      setFocusRequestId(nodeId);
-      return nodeId;
+      return [...prev, layerKey];
     });
   }, []);
+
+  const handleSearchSubmit = useCallback(() => {
+    const keyword = searchInput.trim().toLowerCase();
+    setSearchKeyword(keyword);
+
+    const matchedNodes = baseNodes.filter((node) => {
+      if (!enabledLayerSet.has(node.layer)) {
+        return false;
+      }
+      if (!keyword) {
+        return true;
+      }
+      return (
+        node.id.toLowerCase().includes(keyword) ||
+        (node.name || '').toLowerCase().includes(keyword)
+      );
+    });
+
+    if (!matchedNodes.length) {
+      setSelectedNodeId(null);
+      setFocusRequestId(null);
+      return;
+    }
+
+    setSelectedNodeId(matchedNodes[0].id);
+    setFocusRequestId(matchedNodes[0].id);
+  }, [baseNodes, enabledLayerSet, searchInput]);
 
   const handleFocusConsumed = useCallback(() => {
     setFocusRequestId(null);
@@ -492,9 +445,9 @@ function App() {
       };
 
       if (marker) {
-        cleanupTimer = setTimeout(openPopup, 200);
+        cleanupTimer = setTimeout(openPopup, 160);
       } else {
-        cleanupTimer = setTimeout(openPopup, 400);
+        cleanupTimer = setTimeout(openPopup, 320);
       }
 
       return () => {
@@ -513,16 +466,10 @@ function App() {
         return;
       }
 
-      // 使用动态位置而不是静态位置，确保卫星等移动节点聚焦到实时位置
       const dynState = nodeStateRef.current[nodeId];
-      let nodePosition = null;
-      
-      if (dynState?.location?.geo) {
-        nodePosition = [dynState.location.geo.lat, dynState.location.geo.lng];
-      } else {
-        const baseNode = nodeMapRef.current[nodeId];
-        nodePosition = getNodePosition(baseNode);
-      }
+      const nodePosition = dynState?.location?.geo
+        ? [dynState.location.geo.lat, dynState.location.geo.lng]
+        : getNodePosition(nodeMapRef.current[nodeId]);
 
       if (!nodePosition) {
         onFocusHandled && onFocusHandled();
@@ -542,10 +489,8 @@ function App() {
     return null;
   }
 
-  // 渲染 Marker 的基础数据来自 baseNodes，位置和状态在 Marker 挂载后直接由 Leaflet 更新
-  // 使用 useMemo 缓存 markerElements，避免每次 render 时 Marker 被重新挂载导致闪烁
-  const markerElements = useMemo(() => baseNodes.map((node) => {
-    const typeMeta = NODE_TYPE_META[node.type] || { label: node.type || '未知节点', color: '#7f7f7f' };
+  const markerElements = useMemo(() => visibleNodes.map((node) => {
+    const typeMeta = NODE_TYPE_META[node.type] || { label: node.type || 'Unknown', color: '#7f7f7f' };
     const position = getNodePosition(node);
     if (!position) {
       return null;
@@ -557,7 +502,10 @@ function App() {
         position={position}
         icon={getIconForType(node.type)}
         eventHandlers={{
-          click: () => handleSelectNode(node.id),
+          click: (event) => {
+            handleSelectNode(node.id);
+            event.target?.openPopup?.();
+          },
         }}
         ref={(marker) => {
           if (marker) {
@@ -577,12 +525,9 @@ function App() {
         </Popup>
       </Marker>
     );
-  }), [applyMarkerAltitudeVisual, baseNodes, handleSelectNode]);
+  }), [applyMarkerAltitudeVisual, handleSelectNode, visibleNodes]);
 
-  // 链路渲染使用动态位置，确保连线跟随节点实时更新
-  // 为了让 Polyline 能被 ref 捕获，我们需要使用一个闭包技巧将 ref 回调传递给 Polyline 的 eventHandlers
-  // 不使用 useMemo 因为 linkElements 中的位置需要实时更新（每次 WebSocket 数据到达时）
-  const linkElements = links.map((link) => {
+  const linkElements = visibleLinks.map((link) => {
     const fromPosition = getDynamicNodePosition(link.from);
     const toPosition = getDynamicNodePosition(link.to);
     if (!fromPosition || !toPosition) {
@@ -603,7 +548,6 @@ function App() {
       ? Math.min(1, Math.max(0.4, link.availability))
       : 0.8;
 
-    // 健康线 ref 回调
     const healthLineRefCallback = (polyline) => {
       if (polyline && !linkPolylineRefsById.current[link.id]) {
         linkPolylineRefsById.current[link.id] = [];
@@ -613,7 +557,6 @@ function App() {
       }
     };
 
-    // 流量线 ref 回调
     const flowLineRefCallback = (polyline) => {
       if (polyline && !linkPolylineRefsById.current[link.id]) {
         linkPolylineRefsById.current[link.id] = [];
@@ -622,6 +565,9 @@ function App() {
         linkPolylineRefsById.current[link.id][1] = polyline;
       }
     };
+
+    const isSelectedLink = selectedLinkId === link.id;
+    const highlightWeight = isSelectedLink ? 4.4 : 3;
 
     return (
       <React.Fragment key={link.id}>
@@ -633,18 +579,39 @@ function App() {
             color: healthColor,
             opacity: baseOpacity,
             className: 'link-line link-line--health',
+            weight: isSelectedLink ? 3.4 : getLinkStyle(link).weight,
+            interactive: false,
           }}
         />
         <Polyline
           ref={flowLineRefCallback}
+          eventHandlers={{
+            click: (event) => {
+              setSelectedLinkId(link.id);
+              event.target?.openPopup?.();
+            },
+          }}
           positions={linkPositions}
           pathOptions={{
             color: healthColor,
-            weight: 3,
+            weight: highlightWeight,
             opacity: 0.9,
             className: flowClass,
           }}
-        />
+        >
+          <Popup>
+            <div className="text-sm text-slate-900">
+              <div className="text-base font-semibold">Link {link.id}</div>
+              <div className="mt-1">From: {link.from}</div>
+              <div>To: {link.to}</div>
+              <div>Type: {link.type}</div>
+              <div>Bandwidth: {link.bandwidthMbps ?? '-'} Mbps</div>
+              <div>Delay: {link.delayMs ?? '-'} ms</div>
+              <div>Loss: {typeof link.lossRate === 'number' ? `${(link.lossRate * 100).toFixed(2)}%` : '-'}</div>
+              <div>SNR: {typeof link.snrDb === 'number' ? `${link.snrDb} dB` : '-'}</div>
+            </div>
+          </Popup>
+        </Polyline>
       </React.Fragment>
     );
   });
@@ -655,7 +622,7 @@ function App() {
         className={`absolute top-0 left-0 z-10 h-full transition-all duration-300 ease-out border-r border-white/20 backdrop-blur-2xl bg-white/5 shadow-2xl flex-shrink-0 ${sidebarCollapsed ? 'w-20' : 'w-80'}`}
       >
         <NodeList
-          nodes={baseNodes}
+          nodes={visibleNodes}
           collapsed={sidebarCollapsed}
           onToggle={handleToggleSidebar}
           typeMeta={NODE_TYPE_META}
@@ -664,19 +631,68 @@ function App() {
         />
       </div>
 
+      <div className="absolute left-[104px] top-5 z-[1000] w-[320px] rounded-2xl border border-white/20 bg-[#07182fcc] p-3 text-xs text-slate-100 backdrop-blur-xl shadow-2xl">
+        <p className="tracking-[0.2em] uppercase text-[10px] text-cyan-200/90">Phase 1 Controls</p>
+        <div className="mt-2 flex gap-2">
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                handleSearchSubmit();
+              }
+            }}
+            className="w-full rounded-md border border-white/20 bg-white/10 px-2 py-1 text-xs text-slate-100 placeholder:text-slate-400 focus:outline-none"
+            placeholder="Search by node ID / name"
+          />
+          <button
+            type="button"
+            onClick={handleSearchSubmit}
+            className="rounded-md border border-white/20 bg-white/10 px-2 py-1 text-xs hover:bg-white/20"
+          >
+            Go
+          </button>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {LAYER_OPTIONS.map((layer) => {
+            const enabled = enabledLayerSet.has(layer.key);
+            return (
+              <button
+                key={layer.key}
+                type="button"
+                onClick={() => handleLayerToggle(layer.key)}
+                className={`rounded-full border px-2 py-1 ${enabled ? 'border-emerald-300/70 bg-emerald-400/20 text-emerald-100' : 'border-white/20 bg-white/10 text-slate-200'}`}
+              >
+                {layer.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-3 text-[11px] text-slate-300">
+          Visible: {visibleNodes.length} nodes / {visibleLinks.length} links / {crossLayerRelations.length} relations
+        </div>
+        {selectedLink ? (
+          <div className="mt-2 rounded-lg border border-white/15 bg-white/5 p-2 text-[11px]">
+            <div className="font-semibold text-slate-100">Selected Link: {selectedLink.id}</div>
+            <div className="text-slate-300">{selectedLink.from} -&gt; {selectedLink.to}</div>
+          </div>
+        ) : null}
+      </div>
+
       <div className="map-mode-panel absolute right-5 top-5 z-[1000] rounded-2xl border border-white/20 bg-[#07182fcc] p-3 text-xs text-slate-100 backdrop-blur-xl shadow-2xl">
         <p className="tracking-[0.2em] uppercase text-[10px] text-cyan-200/90">Map View</p>
         <button
           type="button"
           onClick={handleToggleMapViewMode}
           className="map-mode-toggle mt-2"
-          aria-label="切换 2D / 3D 地图视图"
+          aria-label="Toggle 2D / 3D map mode"
         >
           <span className={mapViewMode === '2d' ? 'is-active' : ''}>2D</span>
           <span className={mapViewMode === '3d' ? 'is-active' : ''}>3D</span>
         </button>
         <p className="mt-2 text-[11px] text-slate-300/90">
-          {mapViewMode === '3d' ? '3D 视角：空天地节点按真实高度分层显示。' : '2D 模式：保持平面拓扑表现。'}
+          {mapViewMode === '3d' ? '3D mode for altitude-aware display.' : '2D mode for static topology display.'}
         </p>
       </div>
 
@@ -694,15 +710,15 @@ function App() {
           />
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution="&copy; OpenStreetMap 贡献者"
+            attribution="&copy; OpenStreetMap contributors"
           />
           {markerElements}
           {linkElements}
         </MapContainer>
       ) : (
         <Map3DView
-          nodes={baseNodes}
-          links={links}
+          nodes={visibleNodes}
+          links={visibleLinks}
           nodeStateRef={nodeStateRef}
           nodeMapRef={nodeMapRef}
           selectedNodeId={selectedNodeId}
