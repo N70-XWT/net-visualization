@@ -11,6 +11,22 @@
   transition: transform 0.9s linear, margin-top 0.45s ease, filter 0.45s ease;
 }
 
+.network-node-icon {
+  cursor: pointer;
+}
+
+.network-node-icon.node-marker--hover {
+  transform: scale(1.08);
+  filter: drop-shadow(0 0 10px rgba(94, 247, 193, 0.7));
+  animation: node-hover-breathe 1.3s ease-in-out infinite;
+}
+
+.network-node-icon.node-marker--selected {
+  transform: scale(1.16);
+  filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.9)) drop-shadow(0 0 18px rgba(94, 247, 193, 0.85));
+  animation: node-selected-pulse 1.5s ease-in-out infinite;
+}
+
 .map-moving .leaflet-marker-icon,
 .map-moving .leaflet-marker-shadow {
   transition: none;
@@ -79,6 +95,19 @@
   filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.5));
 }
 
+.link-line--hover {
+  filter: drop-shadow(0 0 10px rgba(94, 247, 193, 0.75));
+}
+
+.link-line--selected {
+  filter: drop-shadow(0 0 14px rgba(255, 255, 255, 0.92)) drop-shadow(0 0 12px rgba(94, 247, 193, 0.8));
+  animation: link-selected-pulse 1.4s ease-in-out infinite;
+}
+
+.link-hit-area {
+  cursor: pointer;
+}
+
 .link-flow--slow {
   animation-duration: 3.4s;
 }
@@ -94,6 +123,33 @@
 @keyframes link-flow {
   to {
     stroke-dashoffset: -280;
+  }
+}
+
+@keyframes node-hover-breathe {
+  0% {
+    filter: drop-shadow(0 0 8px rgba(94, 247, 193, 0.45));
+  }
+  100% {
+    filter: drop-shadow(0 0 12px rgba(94, 247, 193, 0.82));
+  }
+}
+
+@keyframes node-selected-pulse {
+  0% {
+    filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.75)) drop-shadow(0 0 10px rgba(94, 247, 193, 0.7));
+  }
+  100% {
+    filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 16px rgba(94, 247, 193, 0.92));
+  }
+}
+
+@keyframes link-selected-pulse {
+  0% {
+    filter: drop-shadow(0 0 9px rgba(94, 247, 193, 0.55));
+  }
+  100% {
+    filter: drop-shadow(0 0 14px rgba(255, 255, 255, 0.88));
   }
 }
 

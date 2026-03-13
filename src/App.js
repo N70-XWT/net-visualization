@@ -205,7 +205,9 @@ function App() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
+  const [hoveredNodeId, setHoveredNodeId] = useState(null);
   const [selectedLinkId, setSelectedLinkId] = useState(null);
+  const [hoveredLinkId, setHoveredLinkId] = useState(null);
   const [focusRequestId, setFocusRequestId] = useState(null);
   const [mapViewMode, setMapViewMode] = useState('2d');
   const [searchInput, setSearchInput] = useState('');
@@ -281,8 +283,22 @@ function App() {
     markerElement.style.marginTop = `${-liftPx}px`;
 
     const selectedBoost = selectedNodeId === nodeId ? 220 : 0;
-    marker.setZIndexOffset(liftPx + selectedBoost);
-  }, [getDynamicNodeAltitude, mapViewMode, selectedNodeId]);
+    const hoverBoost = hoveredNodeId === nodeId ? 120 : 0;
+    marker.setZIndexOffset(liftPx + selectedBoost + hoverBoost);
+  }, [getDynamicNodeAltitude, hoveredNodeId, mapViewMode, selectedNodeId]);
+
+  const applyMarkerInteractiveVisual = useCallback((marker, nodeId) => {
+    if (!marker) {
+      return;
+    }
+    const markerElement = marker.getElement?.();
+    if (!markerElement) {
+      return;
+    }
+    markerElement.classList.toggle('node-marker--hover', hoveredNodeId === nodeId);
+    markerElement.classList.toggle('node-marker--selected', selectedNodeId === nodeId);
+    markerElement.style.cursor = 'pointer';
+  }, [hoveredNodeId, selectedNodeId]);
 
   useEffect(() => {
     nodeMapRef.current = buildNodeMap(baseNodes);
@@ -296,10 +312,22 @@ function App() {
   }, [selectedNodeId, visibleNodeSet]);
 
   useEffect(() => {
+    if (hoveredNodeId && !visibleNodeSet.has(hoveredNodeId)) {
+      setHoveredNodeId(null);
+    }
+  }, [hoveredNodeId, visibleNodeSet]);
+
+  useEffect(() => {
     if (selectedLinkId && !visibleLinks.some((item) => item.id === selectedLinkId)) {
       setSelectedLinkId(null);
     }
   }, [selectedLinkId, visibleLinks]);
+
+  useEffect(() => {
+    if (hoveredLinkId && !visibleLinks.some((item) => item.id === hoveredLinkId)) {
+      setHoveredLinkId(null);
+    }
+  }, [hoveredLinkId, visibleLinks]);
 
   const handleToggleSidebar = useCallback((value) => {
     const nextCollapsed = !!value;
@@ -362,6 +390,7 @@ function App() {
   useEffect(() => {
     Object.entries(markerRefsById.current).forEach(([nodeId, marker]) => {
       applyMarkerAltitudeVisual(marker, nodeId);
+      applyMarkerInteractiveVisual(marker, nodeId);
     });
 
     links.forEach((link) => {
@@ -390,7 +419,7 @@ function App() {
         }
       });
     });
-  }, [applyMarkerAltitudeVisual, getDynamicNodeAltitude, getDynamicNodePosition, links, mapViewMode]);
+  }, [applyMarkerAltitudeVisual, applyMarkerInteractiveVisual, getDynamicNodeAltitude, getDynamicNodePosition, links, mapViewMode]);
 
   function MapMovementController() {
     const map = useMap();
@@ -430,7 +459,10 @@ function App() {
 
     useEffect(() => {
       if (!nodeId) {
-        map.closePopup();
+        Object.values(markerRefsById.current).forEach((marker) => {
+          marker?.closePopup?.();
+          marker?.setZIndexOffset?.(0);
+        });
         return;
       }
 
@@ -506,11 +538,20 @@ function App() {
             handleSelectNode(node.id);
             event.target?.openPopup?.();
           },
+          popupclose: () => {
+            setSelectedNodeId((prev) => (prev === node.id ? null : prev));
+            setFocusRequestId((prev) => (prev === node.id ? null : prev));
+          },
+          mouseover: () => setHoveredNodeId(node.id),
+          mouseout: () => {
+            setHoveredNodeId((prev) => (prev === node.id ? null : prev));
+          },
         }}
         ref={(marker) => {
           if (marker) {
             markerRefsById.current[node.id] = marker;
             applyMarkerAltitudeVisual(marker, node.id);
+            applyMarkerInteractiveVisual(marker, node.id);
           } else {
             delete markerRefsById.current[node.id];
           }
@@ -525,7 +566,7 @@ function App() {
         </Popup>
       </Marker>
     );
-  }), [applyMarkerAltitudeVisual, handleSelectNode, visibleNodes]);
+  }), [applyMarkerAltitudeVisual, applyMarkerInteractiveVisual, handleSelectNode, visibleNodes]);
 
   const linkElements = visibleLinks.map((link) => {
     const fromPosition = getDynamicNodePosition(link.from);
@@ -567,7 +608,9 @@ function App() {
     };
 
     const isSelectedLink = selectedLinkId === link.id;
-    const highlightWeight = isSelectedLink ? 4.4 : 3;
+    const isHoveredLink = hoveredLinkId === link.id;
+    const highlightWeight = isSelectedLink ? 4.4 : (isHoveredLink ? 3.8 : 3);
+    const linkStateClass = `${isHoveredLink ? ' link-line--hover' : ''}${isSelectedLink ? ' link-line--selected' : ''}`;
 
     const linkPopupContent = (
       <Popup>
@@ -593,8 +636,8 @@ function App() {
             ...getLinkStyle(link),
             color: healthColor,
             opacity: baseOpacity,
-            className: 'link-line link-line--health',
-            weight: isSelectedLink ? 3.4 : getLinkStyle(link).weight,
+            className: `link-line link-line--health${linkStateClass}`,
+            weight: isSelectedLink ? 3.8 : (isHoveredLink ? 3.2 : getLinkStyle(link).weight),
             interactive: false,
           }}
         />
@@ -605,14 +648,20 @@ function App() {
             color: healthColor,
             weight: highlightWeight,
             opacity: 0.9,
-            className: flowClass,
+            className: `${flowClass}${linkStateClass}`,
             interactive: false,
           }}
         />
         <Polyline
           positions={linkPositions}
           eventHandlers={{
+            mouseover: () => setHoveredLinkId(link.id),
+            mouseout: () => {
+              setHoveredLinkId((prev) => (prev === link.id ? null : prev));
+            },
             click: (event) => {
+              setSelectedNodeId(null);
+              setFocusRequestId(null);
               setSelectedLinkId(link.id);
               event.target?.openPopup?.();
             },
@@ -621,6 +670,7 @@ function App() {
             color: '#ffffff',
             weight: 14,
             opacity: 0,
+            className: 'link-hit-area',
             interactive: true,
           }}
         >
