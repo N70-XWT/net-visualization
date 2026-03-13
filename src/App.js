@@ -569,6 +569,21 @@ function App() {
     const isSelectedLink = selectedLinkId === link.id;
     const highlightWeight = isSelectedLink ? 4.4 : 3;
 
+    const linkPopupContent = (
+      <Popup>
+        <div className="text-sm text-slate-900">
+          <div className="text-base font-semibold">Link {link.id}</div>
+          <div className="mt-1">From: {link.from}</div>
+          <div>To: {link.to}</div>
+          <div>Type: {link.type}</div>
+          <div>Bandwidth: {link.bandwidthMbps ?? '-'} Mbps</div>
+          <div>Delay: {link.delayMs ?? '-'} ms</div>
+          <div>Loss: {typeof link.lossRate === 'number' ? `${(link.lossRate * 100).toFixed(2)}%` : '-'}</div>
+          <div>SNR: {typeof link.snrDb === 'number' ? `${link.snrDb} dB` : '-'}</div>
+        </div>
+      </Popup>
+    );
+
     return (
       <React.Fragment key={link.id}>
         <Polyline
@@ -585,32 +600,31 @@ function App() {
         />
         <Polyline
           ref={flowLineRefCallback}
-          eventHandlers={{
-            click: (event) => {
-              setSelectedLinkId(link.id);
-              event.target?.openPopup?.();
-            },
-          }}
           positions={linkPositions}
           pathOptions={{
             color: healthColor,
             weight: highlightWeight,
             opacity: 0.9,
             className: flowClass,
+            interactive: false,
+          }}
+        />
+        <Polyline
+          positions={linkPositions}
+          eventHandlers={{
+            click: (event) => {
+              setSelectedLinkId(link.id);
+              event.target?.openPopup?.();
+            },
+          }}
+          pathOptions={{
+            color: '#ffffff',
+            weight: 14,
+            opacity: 0,
+            interactive: true,
           }}
         >
-          <Popup>
-            <div className="text-sm text-slate-900">
-              <div className="text-base font-semibold">Link {link.id}</div>
-              <div className="mt-1">From: {link.from}</div>
-              <div>To: {link.to}</div>
-              <div>Type: {link.type}</div>
-              <div>Bandwidth: {link.bandwidthMbps ?? '-'} Mbps</div>
-              <div>Delay: {link.delayMs ?? '-'} ms</div>
-              <div>Loss: {typeof link.lossRate === 'number' ? `${(link.lossRate * 100).toFixed(2)}%` : '-'}</div>
-              <div>SNR: {typeof link.snrDb === 'number' ? `${link.snrDb} dB` : '-'}</div>
-            </div>
-          </Popup>
+          {linkPopupContent}
         </Polyline>
       </React.Fragment>
     );
@@ -631,7 +645,10 @@ function App() {
         />
       </div>
 
-      <div className="absolute left-[104px] top-5 z-[1000] w-[320px] rounded-2xl border border-white/20 bg-[#07182fcc] p-3 text-xs text-slate-100 backdrop-blur-xl shadow-2xl">
+      <div
+        className="absolute top-5 z-[1000] w-[320px] rounded-2xl border border-white/20 bg-[#07182fcc] p-3 text-xs text-slate-100 backdrop-blur-xl shadow-2xl"
+        style={{ left: sidebarCollapsed ? 96 : 336 }}
+      >
         <p className="tracking-[0.2em] uppercase text-[10px] text-cyan-200/90">Phase 1 Controls</p>
         <div className="mt-2 flex gap-2">
           <input
