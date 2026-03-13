@@ -8,23 +8,40 @@
 
 .leaflet-marker-icon,
 .leaflet-marker-shadow {
-  transition: transform 0.9s linear, margin-top 0.45s ease, filter 0.45s ease;
+  transition: transform 0.22s ease-out, margin-top 0.45s ease, filter 0.26s ease-out;
 }
 
 .network-node-icon {
   cursor: pointer;
+  transform-origin: center bottom;
+  will-change: transform, filter;
 }
 
 .network-node-icon.node-marker--hover {
-  transform: scale(1.08);
-  filter: drop-shadow(0 0 10px rgba(94, 247, 193, 0.7));
-  animation: node-hover-breathe 1.3s ease-in-out infinite;
+  transform: scale(1.07);
+  filter: drop-shadow(0 0 8px rgba(94, 247, 193, 0.68));
+  animation: node-hover-breathe 1.15s ease-in-out infinite;
 }
 
 .network-node-icon.node-marker--selected {
   transform: scale(1.16);
   filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.9)) drop-shadow(0 0 18px rgba(94, 247, 193, 0.85));
-  animation: node-selected-pulse 1.5s ease-in-out infinite;
+  animation: node-selected-pulse 1.25s ease-in-out infinite;
+}
+
+.node-halo {
+  pointer-events: none;
+  transition: stroke-opacity 0.2s ease, fill-opacity 0.2s ease, stroke-width 0.2s ease;
+}
+
+.node-halo--hover {
+  filter: drop-shadow(0 0 5px rgba(94, 247, 193, 0.5));
+  animation: node-halo-hover 1.15s ease-in-out infinite;
+}
+
+.node-halo--selected {
+  filter: drop-shadow(0 0 9px rgba(157, 231, 255, 0.9));
+  animation: node-halo-selected 1.3s ease-in-out infinite;
 }
 
 .map-moving .leaflet-marker-icon,
@@ -95,16 +112,27 @@
   filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.5));
 }
 
+.link-line--hover-outline {
+  filter: drop-shadow(0 0 6px rgba(148, 163, 184, 0.62)) drop-shadow(0 0 10px rgba(203, 213, 225, 0.55));
+  animation: link-hover-outline-pulse 1.1s ease-in-out infinite;
+}
+
 .link-line--hover {
-  filter: drop-shadow(0 0 10px rgba(94, 247, 193, 0.75));
+  filter: drop-shadow(0 0 8px rgba(148, 163, 184, 0.55)) drop-shadow(0 0 11px rgba(94, 247, 193, 0.62));
+  animation: link-hover-pulse 1.05s ease-in-out infinite;
 }
 
 .link-line--selected {
   filter: drop-shadow(0 0 14px rgba(255, 255, 255, 0.92)) drop-shadow(0 0 12px rgba(94, 247, 193, 0.8));
-  animation: link-selected-pulse 1.4s ease-in-out infinite;
+  animation: link-selected-pulse 1.2s ease-in-out infinite;
 }
 
 .link-hit-area {
+  cursor: pointer;
+}
+
+.link-hit-area--hover,
+.link-hit-area--selected {
   cursor: pointer;
 }
 
@@ -128,10 +156,10 @@
 
 @keyframes node-hover-breathe {
   0% {
-    filter: drop-shadow(0 0 8px rgba(94, 247, 193, 0.45));
+    filter: drop-shadow(0 0 6px rgba(94, 247, 193, 0.45));
   }
   100% {
-    filter: drop-shadow(0 0 12px rgba(94, 247, 193, 0.82));
+    filter: drop-shadow(0 0 10px rgba(94, 247, 193, 0.8));
   }
 }
 
@@ -146,10 +174,50 @@
 
 @keyframes link-selected-pulse {
   0% {
-    filter: drop-shadow(0 0 9px rgba(94, 247, 193, 0.55));
+    filter: drop-shadow(0 0 10px rgba(94, 247, 193, 0.62));
   }
   100% {
-    filter: drop-shadow(0 0 14px rgba(255, 255, 255, 0.88));
+    filter: drop-shadow(0 0 17px rgba(255, 255, 255, 0.92));
+  }
+}
+
+@keyframes node-halo-hover {
+  0% {
+    stroke-opacity: 0.55;
+    fill-opacity: 0.08;
+  }
+  100% {
+    stroke-opacity: 0.85;
+    fill-opacity: 0.14;
+  }
+}
+
+@keyframes node-halo-selected {
+  0% {
+    stroke-opacity: 0.85;
+    fill-opacity: 0.16;
+  }
+  100% {
+    stroke-opacity: 1;
+    fill-opacity: 0.26;
+  }
+}
+
+@keyframes link-hover-pulse {
+  0% {
+    filter: drop-shadow(0 0 7px rgba(148, 163, 184, 0.45)) drop-shadow(0 0 9px rgba(94, 247, 193, 0.42));
+  }
+  100% {
+    filter: drop-shadow(0 0 10px rgba(148, 163, 184, 0.76)) drop-shadow(0 0 12px rgba(94, 247, 193, 0.66));
+  }
+}
+
+@keyframes link-hover-outline-pulse {
+  0% {
+    filter: drop-shadow(0 0 5px rgba(148, 163, 184, 0.5)) drop-shadow(0 0 8px rgba(203, 213, 225, 0.45));
+  }
+  100% {
+    filter: drop-shadow(0 0 8px rgba(148, 163, 184, 0.75)) drop-shadow(0 0 12px rgba(226, 232, 240, 0.62));
   }
 }
 

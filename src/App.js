@@ -1,6 +1,6 @@
 import './App.css';
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -295,8 +295,10 @@ function App() {
     if (!markerElement) {
       return;
     }
-    markerElement.classList.toggle('node-marker--hover', hoveredNodeId === nodeId);
-    markerElement.classList.toggle('node-marker--selected', selectedNodeId === nodeId);
+    const isSelected = selectedNodeId === nodeId;
+    const isHovered = hoveredNodeId === nodeId && !isSelected;
+    markerElement.classList.toggle('node-marker--hover', isHovered);
+    markerElement.classList.toggle('node-marker--selected', isSelected);
     markerElement.style.cursor = 'pointer';
   }, [hoveredNodeId, selectedNodeId]);
 
@@ -521,6 +523,33 @@ function App() {
     return null;
   }
 
+  const nodeHaloElements = useMemo(() => visibleNodes.map((node) => {
+    const position = getNodePosition(node);
+    if (!position) {
+      return null;
+    }
+
+    const isSelected = selectedNodeId === node.id;
+    const isHovered = hoveredNodeId === node.id && !isSelected;
+
+    return (
+      <CircleMarker
+        key={`halo-${node.id}`}
+        center={position}
+        radius={isSelected ? 21 : (isHovered ? 17 : 12)}
+        pathOptions={{
+          color: '#9de7ff',
+          weight: isSelected ? 2.8 : (isHovered ? 2.2 : 1.2),
+          opacity: isSelected ? 0.95 : (isHovered ? 0.72 : 0),
+          fillColor: '#5ef7c1',
+          fillOpacity: isSelected ? 0.22 : (isHovered ? 0.1 : 0),
+          className: `node-halo${isHovered ? ' node-halo--hover' : ''}${isSelected ? ' node-halo--selected' : ''}`,
+          interactive: false,
+        }}
+      />
+    );
+  }), [hoveredNodeId, selectedNodeId, visibleNodes]);
+
   const markerElements = useMemo(() => visibleNodes.map((node) => {
     const typeMeta = NODE_TYPE_META[node.type] || { label: node.type || 'Unknown', color: '#7f7f7f' };
     const position = getNodePosition(node);
@@ -607,9 +636,10 @@ function App() {
       }
     };
 
+    const baseLinkStyle = getLinkStyle(link);
     const isSelectedLink = selectedLinkId === link.id;
-    const isHoveredLink = hoveredLinkId === link.id;
-    const highlightWeight = isSelectedLink ? 4.4 : (isHoveredLink ? 3.8 : 3);
+    const isHoveredLink = hoveredLinkId === link.id && !isSelectedLink;
+    const highlightWeight = isSelectedLink ? 5.2 : (isHoveredLink ? 4.1 : 3);
     const linkStateClass = `${isHoveredLink ? ' link-line--hover' : ''}${isSelectedLink ? ' link-line--selected' : ''}`;
 
     const linkPopupContent = (
@@ -629,15 +659,27 @@ function App() {
 
     return (
       <React.Fragment key={link.id}>
+        {isHoveredLink ? (
+          <Polyline
+            positions={linkPositions}
+            pathOptions={{
+              color: '#c7ced8',
+              weight: 7.6,
+              opacity: 0.6,
+              className: 'link-line link-line--hover-outline',
+              interactive: false,
+            }}
+          />
+        ) : null}
         <Polyline
           ref={healthLineRefCallback}
           positions={linkPositions}
           pathOptions={{
-            ...getLinkStyle(link),
+            ...baseLinkStyle,
             color: healthColor,
             opacity: baseOpacity,
             className: `link-line link-line--health${linkStateClass}`,
-            weight: isSelectedLink ? 3.8 : (isHoveredLink ? 3.2 : getLinkStyle(link).weight),
+            weight: isSelectedLink ? 4.4 : (isHoveredLink ? 3.4 : baseLinkStyle.weight),
             interactive: false,
           }}
         />
@@ -647,7 +689,7 @@ function App() {
           pathOptions={{
             color: healthColor,
             weight: highlightWeight,
-            opacity: 0.9,
+            opacity: isSelectedLink ? 1 : (isHoveredLink ? 0.95 : 0.88),
             className: `${flowClass}${linkStateClass}`,
             interactive: false,
           }}
@@ -668,9 +710,9 @@ function App() {
           }}
           pathOptions={{
             color: '#ffffff',
-            weight: 14,
+            weight: isSelectedLink ? 18 : (isHoveredLink ? 16 : 14),
             opacity: 0,
-            className: 'link-hit-area',
+            className: `link-hit-area${isHoveredLink ? ' link-hit-area--hover' : ''}${isSelectedLink ? ' link-hit-area--selected' : ''}`,
             interactive: true,
           }}
         >
@@ -779,6 +821,7 @@ function App() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution="&copy; OpenStreetMap contributors"
           />
+          {nodeHaloElements}
           {markerElements}
           {linkElements}
         </MapContainer>
