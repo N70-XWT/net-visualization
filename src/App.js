@@ -9,6 +9,13 @@ import Map3DView from './Map3DView';
 
 import { mockTopology } from './services/mockTopologyData';
 import { buildInitialNodeState } from './services/mockNodeStream';
+import {
+  getEvents,
+  getLinkById,
+  getNodeById,
+  getSituationCurrent,
+  getTopology,
+} from './services/networkApi';
 
 import groundStationIconUrl from './assets/icons/ground-station.svg';
 import uavIconUrl from './assets/icons/uav.svg';
@@ -192,9 +199,30 @@ function NodePopupContent({ node, typeMeta, nodeStateRef }) {
 }
 
 function App() {
-  const baseNodes = useMemo(() => mockTopology.nodes, []);
-  const links = useMemo(() => mockTopology.links, []);
-  const crossLayerRelations = useMemo(() => mockTopology.crossLayerRelations, []);
+  const [topologyData, setTopologyData] = useState(() => ({
+    nodes: mockTopology.nodes,
+    links: mockTopology.links,
+    crossLayerRelations: mockTopology.crossLayerRelations,
+  }));
+  const [dataSource, setDataSource] = useState('mock');
+  const [apiError, setApiError] = useState('');
+  const [situationCurrent, setSituationCurrent] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [nodeDetailsById, setNodeDetailsById] = useState({});
+  const [linkDetailsById, setLinkDetailsById] = useState({});
+
+  const baseNodes = useMemo(
+    () => (Array.isArray(topologyData.nodes) ? topologyData.nodes : []),
+    [topologyData.nodes]
+  );
+  const links = useMemo(
+    () => (Array.isArray(topologyData.links) ? topologyData.links : []),
+    [topologyData.links]
+  );
+  const crossLayerRelations = useMemo(
+    () => (Array.isArray(topologyData.crossLayerRelations) ? topologyData.crossLayerRelations : []),
+    [topologyData.crossLayerRelations]
+  );
 
   const markerRefsById = useRef({});
   const linkPolylineRefsById = useRef({});
@@ -243,10 +271,13 @@ function App() {
     });
   }, [links, visibleNodeSet]);
 
-  const selectedLink = useMemo(
-    () => visibleLinks.find((item) => item.id === selectedLinkId) || null,
-    [selectedLinkId, visibleLinks]
-  );
+  const selectedLink = useMemo(() => {
+    const matched = visibleLinks.find((item) => item.id === selectedLinkId);
+    if (!matched) {
+      return null;
+    }
+    return linkDetailsById[selectedLinkId] || matched;
+  }, [linkDetailsById, selectedLinkId, visibleLinks]);
 
   const getDynamicNodeGeo = useCallback((nodeId) => {
     const dynGeo = nodeStateRef.current[nodeId]?.location?.geo;
@@ -304,7 +335,115 @@ function App() {
 
   useEffect(() => {
     nodeMapRef.current = buildNodeMap(baseNodes);
+    nodeStateRef.current = buildInitialNodeState(baseNodes);
   }, [baseNodes]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadTopology = async () => {
+      try {
+        const topology = await getTopology();
+        if (cancelled) {
+          return;
+        }
+
+        setTopologyData({
+          nodes: Array.isArray(topology?.nodes) ? topology.nodes : [],
+          links: Array.isArray(topology?.links) ? topology.links : [],
+          crossLayerRelations: Array.isArray(topology?.crossLayerRelations) ? topology.crossLayerRelations : [],
+        });
+        setDataSource('api');
+        setApiError('');
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        setDataSource('mock');
+        setApiError(error?.message || 'Failed to load topology from REST API');
+      }
+    };
+
+    loadTopology();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSituationAndEvents = async () => {
+      try {
+        const [situation, eventItems] = await Promise.all([
+          getSituationCurrent(),
+          getEvents(20),
+        ]);
+        if (cancelled) {
+          return;
+        }
+
+        setSituationCurrent(situation || null);
+        setEvents(Array.isArray(eventItems) ? eventItems : []);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        // Keep this non-blocking for topology rendering.
+      }
+    };
+
+    loadSituationAndEvents();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedNodeId) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    getNodeById(selectedNodeId)
+      .then((nodeDetail) => {
+        if (!cancelled && nodeDetail) {
+          setNodeDetailsById((prev) => ({ ...prev, [selectedNodeId]: nodeDetail }));
+        }
+      })
+      .catch(() => {
+        // Keep popup usable with base topology fallback.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedNodeId]);
+
+  useEffect(() => {
+    if (!selectedLinkId) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    getLinkById(selectedLinkId)
+      .then((linkDetail) => {
+        if (!cancelled && linkDetail) {
+          setLinkDetailsById((prev) => ({ ...prev, [selectedLinkId]: linkDetail }));
+        }
+      })
+      .catch(() => {
+        // Keep popup usable with base topology fallback.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLinkId]);
 
   useEffect(() => {
     if (selectedNodeId && !visibleNodeSet.has(selectedNodeId)) {
@@ -551,7 +690,8 @@ function App() {
   }), [hoveredNodeId, selectedNodeId, visibleNodes]);
 
   const markerElements = useMemo(() => visibleNodes.map((node) => {
-    const typeMeta = NODE_TYPE_META[node.type] || { label: node.type || 'Unknown', color: '#7f7f7f' };
+    const popupNode = nodeDetailsById[node.id] || node;
+    const typeMeta = NODE_TYPE_META[popupNode.type] || { label: popupNode.type || 'Unknown', color: '#7f7f7f' };
     const position = getNodePosition(node);
     if (!position) {
       return null;
@@ -588,16 +728,17 @@ function App() {
       >
         <Popup>
           <NodePopupContent
-            node={node}
+            node={popupNode}
             typeMeta={typeMeta}
             nodeStateRef={nodeStateRef}
           />
         </Popup>
       </Marker>
     );
-  }), [applyMarkerAltitudeVisual, applyMarkerInteractiveVisual, handleSelectNode, visibleNodes]);
+  }), [applyMarkerAltitudeVisual, applyMarkerInteractiveVisual, handleSelectNode, nodeDetailsById, visibleNodes]);
 
   const linkElements = visibleLinks.map((link) => {
+    const linkDetail = linkDetailsById[link.id] || link;
     const fromPosition = getDynamicNodePosition(link.from);
     const toPosition = getDynamicNodePosition(link.to);
     if (!fromPosition || !toPosition) {
@@ -645,14 +786,14 @@ function App() {
     const linkPopupContent = (
       <Popup>
         <div className="text-sm text-slate-900">
-          <div className="text-base font-semibold">Link {link.id}</div>
-          <div className="mt-1">From: {link.from}</div>
-          <div>To: {link.to}</div>
-          <div>Type: {link.type}</div>
-          <div>Bandwidth: {link.bandwidthMbps ?? '-'} Mbps</div>
-          <div>Delay: {link.delayMs ?? '-'} ms</div>
-          <div>Loss: {typeof link.lossRate === 'number' ? `${(link.lossRate * 100).toFixed(2)}%` : '-'}</div>
-          <div>SNR: {typeof link.snrDb === 'number' ? `${link.snrDb} dB` : '-'}</div>
+          <div className="text-base font-semibold">Link {linkDetail.id}</div>
+          <div className="mt-1">From: {linkDetail.from}</div>
+          <div>To: {linkDetail.to}</div>
+          <div>Type: {linkDetail.type}</div>
+          <div>Bandwidth: {linkDetail.bandwidthMbps ?? '-'} Mbps</div>
+          <div>Delay: {linkDetail.delayMs ?? '-'} ms</div>
+          <div>Loss: {typeof linkDetail.lossRate === 'number' ? `${(linkDetail.lossRate * 100).toFixed(2)}%` : '-'}</div>
+          <div>SNR: {typeof linkDetail.snrDb === 'number' ? `${linkDetail.snrDb} dB` : '-'}</div>
         </div>
       </Popup>
     );
@@ -781,6 +922,16 @@ function App() {
         <div className="mt-3 text-[11px] text-slate-300">
           Visible: {visibleNodes.length} nodes / {visibleLinks.length} links / {crossLayerRelations.length} relations
         </div>
+        <div className="mt-1 text-[11px] text-slate-300">
+          Data Source: {dataSource === 'api' ? 'REST API' : 'Local Mock'}
+          {situationCurrent ? ` | Health: ${situationCurrent.healthScore}` : ''}
+          {events.length ? ` | Events: ${events.length}` : ''}
+        </div>
+        {apiError ? (
+          <div className="mt-1 text-[11px] text-amber-200">
+            API fallback: {apiError}
+          </div>
+        ) : null}
         {selectedLink ? (
           <div className="mt-2 rounded-lg border border-white/15 bg-white/5 p-2 text-[11px]">
             <div className="font-semibold text-slate-100">Selected Link: {selectedLink.id}</div>
