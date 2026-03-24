@@ -1,12 +1,13 @@
 {
   "name": "net-visualization-mock-server",
   "version": "1.0.0",
-  "description": "Mock WebSocket server for network topology real-time updates",
+  "description": "Mock backend server for network topology REST APIs",
   "type": "module",
-  "main": "mockWebSocketServer.js",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node mockWebSocketServer.js",
-    "dev": "node mockWebSocketServer.js"
+    "start": "node src/server.js",
+    "dev": "node src/server.js",
+    "start:ws": "node mockWebSocketServer.js"
   },
   "keywords": ["websocket", "network", "topology", "mock"],
   "author": "",

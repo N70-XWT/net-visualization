@@ -1,0 +1,56 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-03-14T08:10:11.634Z",
+  "events": [
+    {
+      "id": "EV-USER-1773475811634-MZ8H2D",
+      "type": "manual:annotation",
+      "severity": "warning",
+      "entityType": "link",
+      "entityId": "L-003",
+      "message": "test event",
+      "status": "open",
+      "occurredAt": "2026-03-14T08:10:11.634Z"
+    },
+    {
+      "id": "EV-NODE-008",
+      "type": "node:status",
+      "severity": "critical",
+      "entityType": "node",
+      "entityId": "UE-302",
+      "message": "Node UE-302 is offline",
+      "status": "open",
+      "occurredAt": "2026-03-14T08:00:22.207Z"
+    },
+    {
+      "id": "EV-LINK-006",
+      "type": "link:quality",
+      "severity": "major",
+      "entityType": "link",
+      "entityId": "L-006",
+      "message": "Link L-006 packet loss elevated (3.00%)",
+      "status": "open",
+      "occurredAt": "2026-03-14T07:59:22.207Z"
+    },
+    {
+      "id": "EV-LINK-007",
+      "type": "link:quality",
+      "severity": "major",
+      "entityType": "link",
+      "entityId": "L-007",
+      "message": "Link L-007 packet loss elevated (3.50%)",
+      "status": "open",
+      "occurredAt": "2026-03-14T07:57:52.207Z"
+    },
+    {
+      "id": "EV-LINK-008",
+      "type": "link:quality",
+      "severity": "critical",
+      "entityType": "link",
+      "entityId": "L-008",
+      "message": "Link L-008 SNR degraded (9 dB)",
+      "status": "open",
+      "occurredAt": "2026-03-14T07:56:22.207Z"
+    }
+  ]
+}

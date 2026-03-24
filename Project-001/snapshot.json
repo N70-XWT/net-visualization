@@ -1,0 +1,811 @@
+{
+  "timestamp": 1773478839993,
+  "nodes": [
+    {
+      "id": "B1",
+      "name": "Backbone-1",
+      "type": "router",
+      "layer": "backbone",
+      "location": {
+        "geo": {
+          "lat": 34.2,
+          "lng": 108.9,
+          "altitude": 0
+        }
+      },
+      "state": {
+        "online": true,
+        "status": "online",
+        "lastSeen": 1773478839993
+      },
+      "metrics": {
+        "cpu": 0.32,
+        "load": 0.41,
+        "cache": 0.0,
+        "energy": 100,
+        "capacity": 500
+      },
+      "role": "core",
+      "alarmLevel": "normal"
+    },
+    {
+      "id": "B2",
+      "name": "Backbone-2",
+      "type": "router",
+      "layer": "backbone",
+      "location": {
+        "geo": {
+          "lat": 34.25,
+          "lng": 108.98,
+          "altitude": 0
+        }
+      },
+      "state": {
+        "online": true,
+        "status": "online",
+        "lastSeen": 1773478839993
+      },
+      "metrics": {
+        "cpu": 0.28,
+        "load": 0.35,
+        "cache": 0.0,
+        "energy": 100,
+        "capacity": 500
+      },
+      "role": "core",
+      "alarmLevel": "normal"
+    },
+    {
+      "id": "B3",
+      "name": "Backbone-3",
+      "type": "satellite",
+      "layer": "backbone",
+      "location": {
+        "geo": {
+          "lat": 34.3,
+          "lng": 109.05,
+          "altitude": 0
+        }
+      },
+      "state": {
+        "online": true,
+        "status": "online",
+        "lastSeen": 1773478839993
+      },
+      "metrics": {
+        "cpu": 0.22,
+        "load": 0.3,
+        "cache": 0.0,
+        "energy": 100,
+        "capacity": 500
+      },
+      "role": "core",
+      "alarmLevel": "normal"
+    },
+    {
+      "id": "A1",
+      "name": "Adhoc-1",
+      "type": "adhoc_node",
+      "layer": "adhoc",
+      "location": {
+        "geo": {
+          "lat": 34.21,
+          "lng": 108.91,
+          "altitude": 0
+        }
+      },
+      "state": {
+        "online": true,
+        "status": "online",
+        "lastSeen": 1773478839993
+      },
+      "metrics": {
+        "cpu": 0.45,
+        "load": 0.52,
+        "cache": 0.0,
+        "energy": 90,
+        "capacity": 200
+      },
+      "role": "relay",
+      "alarmLevel": "normal"
+    },
+    {
+      "id": "A2",
+      "name": "Adhoc-2",
+      "type": "adhoc_node",
+      "layer": "adhoc",
+      "location": {
+        "geo": {
+          "lat": 34.23,
+          "lng": 108.95,
+          "altitude": 0
+        }
+      },
+      "state": {
+        "online": true,
+        "status": "online",
+        "lastSeen": 1773478839993
+      },
+      "metrics": {
+        "cpu": 0.5,
+        "load": 0.57,
+        "cache": 0.0,
+        "energy": 85,
+        "capacity": 200
+      },
+      "role": "relay",
+      "alarmLevel": "normal"
+    },
+    {
+      "id": "A3",
+      "name": "Adhoc-3",
+      "type": "adhoc_node",
+      "layer": "adhoc",
+      "location": {
+        "geo": {
+          "lat": 34.26,
+          "lng": 108.99,
+          "altitude": 0
+        }
+      },
+      "state": {
+        "online": true,
+        "status": "busy",
+        "lastSeen": 1773478839993
+      },
+      "metrics": {
+        "cpu": 0.62,
+        "load": 0.71,
+        "cache": 0.0,
+        "energy": 60,
+        "capacity": 200
+      },
+      "role": "relay",
+      "alarmLevel": "normal"
+    },
+    {
+      "id": "A4",
+      "name": "Adhoc-4",
+      "type": "adhoc_node",
+      "layer": "adhoc",
+      "location": {
+        "geo": {
+          "lat": 34.28,
+          "lng": 109.02,
+          "altitude": 0
+        }
+      },
+      "state": {
+        "online": true,
+        "status": "online",
+        "lastSeen": 1773478839993
+      },
+      "metrics": {
+        "cpu": 0.55,
+        "load": 0.6,
+        "cache": 0.0,
+        "energy": 80,
+        "capacity": 200
+      },
+      "role": "relay",
+      "alarmLevel": "normal"
+    },
+    {
+      "id": "A5",
+      "name": "Adhoc-5",
+      "type": "adhoc_node",
+      "layer": "adhoc",
+      "location": {
+        "geo": {
+          "lat": 34.29,
+          "lng": 109.06,
+          "altitude": 0
+        }
+      },
+      "state": {
+        "online": true,
+        "status": "online",
+        "lastSeen": 1773478839993
+      },
+      "metrics": {
+        "cpu": 0.58,
+        "load": 0.63,
+        "cache": 0.0,
+        "energy": 78,
+        "capacity": 200
+      },
+      "role": "relay",
+      "alarmLevel": "normal"
+    },
+    {
+      "id": "U1",
+      "name": "Terminal-1",
+      "type": "terminal",
+      "layer": "access",
+      "location": {
+        "geo": {
+          "lat": 34.211,
+          "lng": 108.912,
+          "altitude": 0
+        }
+      },
+      "state": {
+        "online": true,
+        "status": "online",
+        "lastSeen": 1773478839993
+      },
+      "metrics": {
+        "cpu": 0.1,
+        "load": 0.2,
+        "cache": 0.0,
+        "energy": 70,
+        "capacity": 50
+      },
+      "role": "user",
+      "alarmLevel": "normal"
+    },
+    {
+      "id": "U2",
+      "name": "Terminal-2",
+      "type": "terminal",
+      "layer": "access",
+      "location": {
+        "geo": {
+          "lat": 34.212,
+          "lng": 108.914,
+          "altitude": 0
+        }
+      },
+      "state": {
+        "online": true,
+        "status": "online",
+        "lastSeen": 1773478839993
+      },
+      "metrics": {
+        "cpu": 0.11,
+        "load": 0.22,
+        "cache": 0.0,
+        "energy": 68,
+        "capacity": 50
+      },
+      "role": "user",
+      "alarmLevel": "normal"
+    },
+    {
+      "id": "U3",
+      "name": "Terminal-3",
+      "type": "terminal",
+      "layer": "access",
+      "location": {
+        "geo": {
+          "lat": 34.231,
+          "lng": 108.951,
+          "altitude": 0
+        }
+      },
+      "state": {
+        "online": true,
+        "status": "online",
+        "lastSeen": 1773478839993
+      },
+      "metrics": {
+        "cpu": 0.09,
+        "load": 0.18,
+        "cache": 0.0,
+        "energy": 72,
+        "capacity": 50
+      },
+      "role": "user",
+      "alarmLevel": "normal"
+    },
+    {
+      "id": "U4",
+      "name": "Terminal-4",
+      "type": "terminal",
+      "layer": "access",
+      "location": {
+        "geo": {
+          "lat": 34.232,
+          "lng": 108.952,
+          "altitude": 0
+        }
+      },
+      "state": {
+        "online": true,
+        "status": "online",
+        "lastSeen": 1773478839993
+      },
+      "metrics": {
+        "cpu": 0.13,
+        "load": 0.25,
+        "cache": 0.0,
+        "energy": 66,
+        "capacity": 50
+      },
+      "role": "user",
+      "alarmLevel": "normal"
+    },
+    {
+      "id": "U5",
+      "name": "Terminal-5",
+      "type": "terminal",
+      "layer": "access",
+      "location": {
+        "geo": {
+          "lat": 34.261,
+          "lng": 108.991,
+          "altitude": 0
+        }
+      },
+      "state": {
+        "online": true,
+        "status": "online",
+        "lastSeen": 1773478839993
+      },
+      "metrics": {
+        "cpu": 0.08,
+        "load": 0.17,
+        "cache": 0.0,
+        "energy": 75,
+        "capacity": 50
+      },
+      "role": "user",
+      "alarmLevel": "normal"
+    },
+    {
+      "id": "U6",
+      "name": "Terminal-6",
+      "type": "terminal",
+      "layer": "access",
+      "location": {
+        "geo": {
+          "lat": 34.262,
+          "lng": 108.993,
+          "altitude": 0
+        }
+      },
+      "state": {
+        "online": true,
+        "status": "online",
+        "lastSeen": 1773478839993
+      },
+      "metrics": {
+        "cpu": 0.09,
+        "load": 0.16,
+        "cache": 0.0,
+        "energy": 74,
+        "capacity": 50
+      },
+      "role": "user",
+      "alarmLevel": "normal"
+    },
+    {
+      "id": "U7",
+      "name": "Terminal-7",
+      "type": "terminal",
+      "layer": "access",
+      "location": {
+        "geo": {
+          "lat": 34.281,
+          "lng": 109.021,
+          "altitude": 0
+        }
+      },
+      "state": {
+        "online": true,
+        "status": "online",
+        "lastSeen": 1773478839993
+      },
+      "metrics": {
+        "cpu": 0.1,
+        "load": 0.21,
+        "cache": 0.0,
+        "energy": 69,
+        "capacity": 50
+      },
+      "role": "user",
+      "alarmLevel": "normal"
+    },
+    {
+      "id": "U8",
+      "name": "Terminal-8",
+      "type": "terminal",
+      "layer": "access",
+      "location": {
+        "geo": {
+          "lat": 34.282,
+          "lng": 109.023,
+          "altitude": 0
+        }
+      },
+      "state": {
+        "online": true,
+        "status": "online",
+        "lastSeen": 1773478839993
+      },
+      "metrics": {
+        "cpu": 0.14,
+        "load": 0.26,
+        "cache": 0.0,
+        "energy": 65,
+        "capacity": 50
+      },
+      "role": "user",
+      "alarmLevel": "normal"
+    },
+    {
+      "id": "U9",
+      "name": "Terminal-9",
+      "type": "terminal",
+      "layer": "access",
+      "location": {
+        "geo": {
+          "lat": 34.291,
+          "lng": 109.061,
+          "altitude": 0
+        }
+      },
+      "state": {
+        "online": true,
+        "status": "online",
+        "lastSeen": 1773478839993
+      },
+      "metrics": {
+        "cpu": 0.13,
+        "load": 0.24,
+        "cache": 0.0,
+        "energy": 64,
+        "capacity": 50
+      },
+      "role": "user",
+      "alarmLevel": "normal"
+    },
+    {
+      "id": "U10",
+      "name": "Terminal-10",
+      "type": "terminal",
+      "layer": "access",
+      "location": {
+        "geo": {
+          "lat": 34.292,
+          "lng": 109.062,
+          "altitude": 0
+        }
+      },
+      "state": {
+        "online": true,
+        "status": "online",
+        "lastSeen": 1773478839993
+      },
+      "metrics": {
+        "cpu": 0.15,
+        "load": 0.27,
+        "cache": 0.0,
+        "energy": 63,
+        "capacity": 50
+      },
+      "role": "user",
+      "alarmLevel": "normal"
+    }
+  ],
+  "links": [
+    {
+      "id": "L-B1-B2",
+      "from": "B1",
+      "to": "B2",
+      "type": "wired",
+      "bandwidthMbps": 1000,
+      "utilization": 0.35,
+      "delayMs": 5,
+      "lossRate": 0.001,
+      "snrDb": 30,
+      "health": "good",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-B2-B3",
+      "from": "B2",
+      "to": "B3",
+      "type": "wired",
+      "bandwidthMbps": 1000,
+      "utilization": 0.33,
+      "delayMs": 5,
+      "lossRate": 0.001,
+      "snrDb": 30,
+      "health": "good",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-B1-B3",
+      "from": "B1",
+      "to": "B3",
+      "type": "wired",
+      "bandwidthMbps": 800,
+      "utilization": 0.4,
+      "delayMs": 8,
+      "lossRate": 0.002,
+      "snrDb": 28,
+      "health": "good",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-A1-B1",
+      "from": "B1",
+      "to": "A1",
+      "type": "wireless",
+      "bandwidthMbps": 100,
+      "utilization": 0.46,
+      "delayMs": 15,
+      "lossRate": 0.01,
+      "snrDb": 24,
+      "health": "good",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-A2-B1",
+      "from": "B1",
+      "to": "A2",
+      "type": "wireless",
+      "bandwidthMbps": 100,
+      "utilization": 0.44,
+      "delayMs": 18,
+      "lossRate": 0.01,
+      "snrDb": 22,
+      "health": "good",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-A3-B2",
+      "from": "B2",
+      "to": "A3",
+      "type": "wireless",
+      "bandwidthMbps": 100,
+      "utilization": 0.45,
+      "delayMs": 15,
+      "lossRate": 0.01,
+      "snrDb": 23,
+      "health": "good",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-A4-B3",
+      "from": "B3",
+      "to": "A4",
+      "type": "wireless",
+      "bandwidthMbps": 100,
+      "utilization": 0.49,
+      "delayMs": 16,
+      "lossRate": 0.01,
+      "snrDb": 21,
+      "health": "good",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-A5-B3",
+      "from": "B3",
+      "to": "A5",
+      "type": "wireless",
+      "bandwidthMbps": 100,
+      "utilization": 0.54,
+      "delayMs": 20,
+      "lossRate": 0.02,
+      "snrDb": 19,
+      "health": "good",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-A1-A2",
+      "from": "A1",
+      "to": "A2",
+      "type": "wireless",
+      "bandwidthMbps": 50,
+      "utilization": 0.52,
+      "delayMs": 10,
+      "lossRate": 0.02,
+      "snrDb": 21,
+      "health": "good",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-A2-A3",
+      "from": "A2",
+      "to": "A3",
+      "type": "wireless",
+      "bandwidthMbps": 50,
+      "utilization": 0.56,
+      "delayMs": 30,
+      "lossRate": 0.03,
+      "snrDb": 19,
+      "health": "warning",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-A3-A4",
+      "from": "A3",
+      "to": "A4",
+      "type": "wireless",
+      "bandwidthMbps": 50,
+      "utilization": 0.5,
+      "delayMs": 10,
+      "lossRate": 0.02,
+      "snrDb": 20,
+      "health": "good",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-A4-A5",
+      "from": "A4",
+      "to": "A5",
+      "type": "wireless",
+      "bandwidthMbps": 50,
+      "utilization": 0.53,
+      "delayMs": 9,
+      "lossRate": 0.02,
+      "snrDb": 20,
+      "health": "good",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-A1-U1",
+      "from": "A1",
+      "to": "U1",
+      "type": "wireless",
+      "bandwidthMbps": 20,
+      "utilization": 0.22,
+      "delayMs": 6,
+      "lossRate": 0.03,
+      "snrDb": 18,
+      "health": "good",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-A1-U2",
+      "from": "A1",
+      "to": "U2",
+      "type": "wireless",
+      "bandwidthMbps": 20,
+      "utilization": 0.24,
+      "delayMs": 6,
+      "lossRate": 0.03,
+      "snrDb": 18,
+      "health": "good",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-A2-U3",
+      "from": "A2",
+      "to": "U3",
+      "type": "wireless",
+      "bandwidthMbps": 20,
+      "utilization": 0.2,
+      "delayMs": 7,
+      "lossRate": 0.03,
+      "snrDb": 17,
+      "health": "warning",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-A2-U4",
+      "from": "A2",
+      "to": "U4",
+      "type": "wireless",
+      "bandwidthMbps": 20,
+      "utilization": 0.25,
+      "delayMs": 7,
+      "lossRate": 0.03,
+      "snrDb": 17,
+      "health": "warning",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-A3-U5",
+      "from": "A3",
+      "to": "U5",
+      "type": "wireless",
+      "bandwidthMbps": 20,
+      "utilization": 0.21,
+      "delayMs": 6,
+      "lossRate": 0.03,
+      "snrDb": 18,
+      "health": "good",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-A3-U6",
+      "from": "A3",
+      "to": "U6",
+      "type": "wireless",
+      "bandwidthMbps": 20,
+      "utilization": 0.19,
+      "delayMs": 6,
+      "lossRate": 0.03,
+      "snrDb": 18,
+      "health": "good",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-A4-U7",
+      "from": "A4",
+      "to": "U7",
+      "type": "wireless",
+      "bandwidthMbps": 20,
+      "utilization": 0.23,
+      "delayMs": 7,
+      "lossRate": 0.03,
+      "snrDb": 17,
+      "health": "warning",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-A4-U8",
+      "from": "A4",
+      "to": "U8",
+      "type": "wireless",
+      "bandwidthMbps": 20,
+      "utilization": 0.27,
+      "delayMs": 7,
+      "lossRate": 0.03,
+      "snrDb": 16,
+      "health": "warning",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-A5-U9",
+      "from": "A5",
+      "to": "U9",
+      "type": "wireless",
+      "bandwidthMbps": 20,
+      "utilization": 0.28,
+      "delayMs": 8,
+      "lossRate": 0.04,
+      "snrDb": 15,
+      "health": "warning",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    },
+    {
+      "id": "L-A5-U10",
+      "from": "A5",
+      "to": "U10",
+      "type": "wireless",
+      "bandwidthMbps": 20,
+      "utilization": 0.3,
+      "delayMs": 8,
+      "lossRate": 0.04,
+      "snrDb": 15,
+      "health": "warning",
+      "state": "up",
+      "lastUpdate": 1773478839993
+    }
+  ],
+  "metrics": {
+    "networkHealth": 0.9054,
+    "onlineRate": 1.0,
+    "avgDelay": 10.4091,
+    "avgLoss": 0.0215,
+    "avgLoad": 0.3472,
+    "connected": true,
+    "nodeCount": 18,
+    "linkCount": 22
+  }
+}

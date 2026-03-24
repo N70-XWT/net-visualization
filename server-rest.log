@@ -1,0 +1,7 @@
+========================================
+Network Visualization REST Mock Server
+========================================
+Listening: http://localhost:8080
+Health:    http://localhost:8080/health
+REST APIs: /api/topology, /api/nodes/:id, /api/links/:id, /api/situation/current, /api/events
+========================================

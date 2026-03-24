@@ -1,6 +1,10 @@
 import './App.css';
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+<<<<<<< HEAD
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+=======
+import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMap } from 'react-leaflet';
+>>>>>>> codex-save-1
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -9,6 +13,16 @@ import Map3DView from './Map3DView';
 
 import { mockTopology } from './services/mockTopologyData';
 import { buildInitialNodeState } from './services/mockNodeStream';
+<<<<<<< HEAD
+=======
+import {
+  getEvents,
+  getLinkById,
+  getNodeById,
+  getSituationCurrent,
+  getTopology,
+} from './services/networkApi';
+>>>>>>> codex-save-1
 
 import groundStationIconUrl from './assets/icons/ground-station.svg';
 import uavIconUrl from './assets/icons/uav.svg';
@@ -192,9 +206,36 @@ function NodePopupContent({ node, typeMeta, nodeStateRef }) {
 }
 
 function App() {
+<<<<<<< HEAD
   const baseNodes = useMemo(() => mockTopology.nodes, []);
   const links = useMemo(() => mockTopology.links, []);
   const crossLayerRelations = useMemo(() => mockTopology.crossLayerRelations, []);
+=======
+  const [topologyData, setTopologyData] = useState(() => ({
+    nodes: mockTopology.nodes,
+    links: mockTopology.links,
+    crossLayerRelations: mockTopology.crossLayerRelations,
+  }));
+  const [dataSource, setDataSource] = useState('mock');
+  const [apiError, setApiError] = useState('');
+  const [situationCurrent, setSituationCurrent] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [nodeDetailsById, setNodeDetailsById] = useState({});
+  const [linkDetailsById, setLinkDetailsById] = useState({});
+
+  const baseNodes = useMemo(
+    () => (Array.isArray(topologyData.nodes) ? topologyData.nodes : []),
+    [topologyData.nodes]
+  );
+  const links = useMemo(
+    () => (Array.isArray(topologyData.links) ? topologyData.links : []),
+    [topologyData.links]
+  );
+  const crossLayerRelations = useMemo(
+    () => (Array.isArray(topologyData.crossLayerRelations) ? topologyData.crossLayerRelations : []),
+    [topologyData.crossLayerRelations]
+  );
+>>>>>>> codex-save-1
 
   const markerRefsById = useRef({});
   const linkPolylineRefsById = useRef({});
@@ -205,7 +246,13 @@ function App() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
+<<<<<<< HEAD
   const [selectedLinkId, setSelectedLinkId] = useState(null);
+=======
+  const [hoveredNodeId, setHoveredNodeId] = useState(null);
+  const [selectedLinkId, setSelectedLinkId] = useState(null);
+  const [hoveredLinkId, setHoveredLinkId] = useState(null);
+>>>>>>> codex-save-1
   const [focusRequestId, setFocusRequestId] = useState(null);
   const [mapViewMode, setMapViewMode] = useState('2d');
   const [searchInput, setSearchInput] = useState('');
@@ -241,10 +288,20 @@ function App() {
     });
   }, [links, visibleNodeSet]);
 
+<<<<<<< HEAD
   const selectedLink = useMemo(
     () => visibleLinks.find((item) => item.id === selectedLinkId) || null,
     [selectedLinkId, visibleLinks]
   );
+=======
+  const selectedLink = useMemo(() => {
+    const matched = visibleLinks.find((item) => item.id === selectedLinkId);
+    if (!matched) {
+      return null;
+    }
+    return linkDetailsById[selectedLinkId] || matched;
+  }, [linkDetailsById, selectedLinkId, visibleLinks]);
+>>>>>>> codex-save-1
 
   const getDynamicNodeGeo = useCallback((nodeId) => {
     const dynGeo = nodeStateRef.current[nodeId]?.location?.geo;
@@ -281,12 +338,145 @@ function App() {
     markerElement.style.marginTop = `${-liftPx}px`;
 
     const selectedBoost = selectedNodeId === nodeId ? 220 : 0;
-    marker.setZIndexOffset(liftPx + selectedBoost);
-  }, [getDynamicNodeAltitude, mapViewMode, selectedNodeId]);
+    const hoverBoost = hoveredNodeId === nodeId ? 120 : 0;
+    marker.setZIndexOffset(liftPx + selectedBoost + hoverBoost);
+  }, [getDynamicNodeAltitude, hoveredNodeId, mapViewMode, selectedNodeId]);
+
+  const applyMarkerInteractiveVisual = useCallback((marker, nodeId) => {
+    if (!marker) {
+      return;
+    }
+    const markerElement = marker.getElement?.();
+    if (!markerElement) {
+      return;
+    }
+    const isSelected = selectedNodeId === nodeId;
+    const isHovered = hoveredNodeId === nodeId && !isSelected;
+    markerElement.classList.toggle('node-marker--hover', isHovered);
+    markerElement.classList.toggle('node-marker--selected', isSelected);
+    markerElement.style.cursor = 'pointer';
+  }, [hoveredNodeId, selectedNodeId]);
 
   useEffect(() => {
     nodeMapRef.current = buildNodeMap(baseNodes);
+    nodeStateRef.current = buildInitialNodeState(baseNodes);
   }, [baseNodes]);
+
+  useEffect(() => {
+<<<<<<< HEAD
+    if (selectedNodeId && !visibleNodeSet.has(selectedNodeId)) {
+      setSelectedNodeId(null);
+      setFocusRequestId(null);
+=======
+    let cancelled = false;
+
+    const loadTopology = async () => {
+      try {
+        const topology = await getTopology();
+        if (cancelled) {
+          return;
+        }
+
+        setTopologyData({
+          nodes: Array.isArray(topology?.nodes) ? topology.nodes : [],
+          links: Array.isArray(topology?.links) ? topology.links : [],
+          crossLayerRelations: Array.isArray(topology?.crossLayerRelations) ? topology.crossLayerRelations : [],
+        });
+        setDataSource('api');
+        setApiError('');
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        setDataSource('mock');
+        setApiError(error?.message || 'Failed to load topology from REST API');
+      }
+    };
+
+    loadTopology();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSituationAndEvents = async () => {
+      try {
+        const [situation, eventItems] = await Promise.all([
+          getSituationCurrent(),
+          getEvents(20),
+        ]);
+        if (cancelled) {
+          return;
+        }
+
+        setSituationCurrent(situation || null);
+        setEvents(Array.isArray(eventItems) ? eventItems : []);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        // Keep this non-blocking for topology rendering.
+      }
+    };
+
+    loadSituationAndEvents();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedNodeId) {
+      return undefined;
+>>>>>>> codex-save-1
+    }
+  }, [selectedNodeId, visibleNodeSet]);
+
+<<<<<<< HEAD
+=======
+    let cancelled = false;
+
+    getNodeById(selectedNodeId)
+      .then((nodeDetail) => {
+        if (!cancelled && nodeDetail) {
+          setNodeDetailsById((prev) => ({ ...prev, [selectedNodeId]: nodeDetail }));
+        }
+      })
+      .catch(() => {
+        // Keep popup usable with base topology fallback.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedNodeId]);
+
+  useEffect(() => {
+    if (!selectedLinkId) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    getLinkById(selectedLinkId)
+      .then((linkDetail) => {
+        if (!cancelled && linkDetail) {
+          setLinkDetailsById((prev) => ({ ...prev, [selectedLinkId]: linkDetail }));
+        }
+      })
+      .catch(() => {
+        // Keep popup usable with base topology fallback.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLinkId]);
 
   useEffect(() => {
     if (selectedNodeId && !visibleNodeSet.has(selectedNodeId)) {
@@ -296,10 +486,26 @@ function App() {
   }, [selectedNodeId, visibleNodeSet]);
 
   useEffect(() => {
+    if (hoveredNodeId && !visibleNodeSet.has(hoveredNodeId)) {
+      setHoveredNodeId(null);
+    }
+  }, [hoveredNodeId, visibleNodeSet]);
+
+>>>>>>> codex-save-1
+  useEffect(() => {
     if (selectedLinkId && !visibleLinks.some((item) => item.id === selectedLinkId)) {
       setSelectedLinkId(null);
     }
   }, [selectedLinkId, visibleLinks]);
+<<<<<<< HEAD
+=======
+
+  useEffect(() => {
+    if (hoveredLinkId && !visibleLinks.some((item) => item.id === hoveredLinkId)) {
+      setHoveredLinkId(null);
+    }
+  }, [hoveredLinkId, visibleLinks]);
+>>>>>>> codex-save-1
 
   const handleToggleSidebar = useCallback((value) => {
     const nextCollapsed = !!value;
@@ -362,6 +568,7 @@ function App() {
   useEffect(() => {
     Object.entries(markerRefsById.current).forEach(([nodeId, marker]) => {
       applyMarkerAltitudeVisual(marker, nodeId);
+      applyMarkerInteractiveVisual(marker, nodeId);
     });
 
     links.forEach((link) => {
@@ -390,7 +597,7 @@ function App() {
         }
       });
     });
-  }, [applyMarkerAltitudeVisual, getDynamicNodeAltitude, getDynamicNodePosition, links, mapViewMode]);
+  }, [applyMarkerAltitudeVisual, applyMarkerInteractiveVisual, getDynamicNodeAltitude, getDynamicNodePosition, links, mapViewMode]);
 
   function MapMovementController() {
     const map = useMap();
@@ -430,7 +637,10 @@ function App() {
 
     useEffect(() => {
       if (!nodeId) {
-        map.closePopup();
+        Object.values(markerRefsById.current).forEach((marker) => {
+          marker?.closePopup?.();
+          marker?.setZIndexOffset?.(0);
+        });
         return;
       }
 
@@ -489,8 +699,41 @@ function App() {
     return null;
   }
 
+<<<<<<< HEAD
   const markerElements = useMemo(() => visibleNodes.map((node) => {
     const typeMeta = NODE_TYPE_META[node.type] || { label: node.type || 'Unknown', color: '#7f7f7f' };
+=======
+  const nodeHaloElements = useMemo(() => visibleNodes.map((node) => {
+    const position = getNodePosition(node);
+    if (!position) {
+      return null;
+    }
+
+    const isSelected = selectedNodeId === node.id;
+    const isHovered = hoveredNodeId === node.id && !isSelected;
+
+    return (
+      <CircleMarker
+        key={`halo-${node.id}`}
+        center={position}
+        radius={isSelected ? 21 : (isHovered ? 17 : 12)}
+        pathOptions={{
+          color: '#9de7ff',
+          weight: isSelected ? 2.8 : (isHovered ? 2.2 : 1.2),
+          opacity: isSelected ? 0.95 : (isHovered ? 0.72 : 0),
+          fillColor: '#5ef7c1',
+          fillOpacity: isSelected ? 0.22 : (isHovered ? 0.1 : 0),
+          className: `node-halo${isHovered ? ' node-halo--hover' : ''}${isSelected ? ' node-halo--selected' : ''}`,
+          interactive: false,
+        }}
+      />
+    );
+  }), [hoveredNodeId, selectedNodeId, visibleNodes]);
+
+  const markerElements = useMemo(() => visibleNodes.map((node) => {
+    const popupNode = nodeDetailsById[node.id] || node;
+    const typeMeta = NODE_TYPE_META[popupNode.type] || { label: popupNode.type || 'Unknown', color: '#7f7f7f' };
+>>>>>>> codex-save-1
     const position = getNodePosition(node);
     if (!position) {
       return null;
@@ -506,11 +749,23 @@ function App() {
             handleSelectNode(node.id);
             event.target?.openPopup?.();
           },
+<<<<<<< HEAD
+=======
+          popupclose: () => {
+            setSelectedNodeId((prev) => (prev === node.id ? null : prev));
+            setFocusRequestId((prev) => (prev === node.id ? null : prev));
+          },
+          mouseover: () => setHoveredNodeId(node.id),
+          mouseout: () => {
+            setHoveredNodeId((prev) => (prev === node.id ? null : prev));
+          },
+>>>>>>> codex-save-1
         }}
         ref={(marker) => {
           if (marker) {
             markerRefsById.current[node.id] = marker;
             applyMarkerAltitudeVisual(marker, node.id);
+            applyMarkerInteractiveVisual(marker, node.id);
           } else {
             delete markerRefsById.current[node.id];
           }
@@ -518,16 +773,23 @@ function App() {
       >
         <Popup>
           <NodePopupContent
-            node={node}
+            node={popupNode}
             typeMeta={typeMeta}
             nodeStateRef={nodeStateRef}
           />
         </Popup>
       </Marker>
     );
+<<<<<<< HEAD
   }), [applyMarkerAltitudeVisual, handleSelectNode, visibleNodes]);
 
   const linkElements = visibleLinks.map((link) => {
+=======
+  }), [applyMarkerAltitudeVisual, applyMarkerInteractiveVisual, handleSelectNode, nodeDetailsById, visibleNodes]);
+
+  const linkElements = visibleLinks.map((link) => {
+    const linkDetail = linkDetailsById[link.id] || link;
+>>>>>>> codex-save-1
     const fromPosition = getDynamicNodePosition(link.from);
     const toPosition = getDynamicNodePosition(link.to);
     if (!fromPosition || !toPosition) {
@@ -566,20 +828,60 @@ function App() {
       }
     };
 
+<<<<<<< HEAD
     const isSelectedLink = selectedLinkId === link.id;
     const highlightWeight = isSelectedLink ? 4.4 : 3;
+=======
+    const baseLinkStyle = getLinkStyle(link);
+    const isSelectedLink = selectedLinkId === link.id;
+    const isHoveredLink = hoveredLinkId === link.id && !isSelectedLink;
+    const highlightWeight = isSelectedLink ? 5.2 : (isHoveredLink ? 4.1 : 3);
+    const linkStateClass = `${isHoveredLink ? ' link-line--hover' : ''}${isSelectedLink ? ' link-line--selected' : ''}`;
+
+    const linkPopupContent = (
+      <Popup>
+        <div className="text-sm text-slate-900">
+          <div className="text-base font-semibold">Link {linkDetail.id}</div>
+          <div className="mt-1">From: {linkDetail.from}</div>
+          <div>To: {linkDetail.to}</div>
+          <div>Type: {linkDetail.type}</div>
+          <div>Bandwidth: {linkDetail.bandwidthMbps ?? '-'} Mbps</div>
+          <div>Delay: {linkDetail.delayMs ?? '-'} ms</div>
+          <div>Loss: {typeof linkDetail.lossRate === 'number' ? `${(linkDetail.lossRate * 100).toFixed(2)}%` : '-'}</div>
+          <div>SNR: {typeof linkDetail.snrDb === 'number' ? `${linkDetail.snrDb} dB` : '-'}</div>
+        </div>
+      </Popup>
+    );
+>>>>>>> codex-save-1
 
     return (
       <React.Fragment key={link.id}>
+        {isHoveredLink ? (
+          <Polyline
+            positions={linkPositions}
+            pathOptions={{
+              color: '#c7ced8',
+              weight: 7.6,
+              opacity: 0.6,
+              className: 'link-line link-line--hover-outline',
+              interactive: false,
+            }}
+          />
+        ) : null}
         <Polyline
           ref={healthLineRefCallback}
           positions={linkPositions}
           pathOptions={{
-            ...getLinkStyle(link),
+            ...baseLinkStyle,
             color: healthColor,
             opacity: baseOpacity,
+<<<<<<< HEAD
             className: 'link-line link-line--health',
             weight: isSelectedLink ? 3.4 : getLinkStyle(link).weight,
+=======
+            className: `link-line link-line--health${linkStateClass}`,
+            weight: isSelectedLink ? 4.4 : (isHoveredLink ? 3.4 : baseLinkStyle.weight),
+>>>>>>> codex-save-1
             interactive: false,
           }}
         />
@@ -595,6 +897,7 @@ function App() {
           pathOptions={{
             color: healthColor,
             weight: highlightWeight,
+<<<<<<< HEAD
             opacity: 0.9,
             className: flowClass,
           }}
@@ -611,6 +914,36 @@ function App() {
               <div>SNR: {typeof link.snrDb === 'number' ? `${link.snrDb} dB` : '-'}</div>
             </div>
           </Popup>
+=======
+            opacity: isSelectedLink ? 1 : (isHoveredLink ? 0.95 : 0.88),
+            className: `${flowClass}${linkStateClass}`,
+            interactive: false,
+          }}
+        />
+        <Polyline
+          positions={linkPositions}
+          eventHandlers={{
+            mouseover: () => setHoveredLinkId(link.id),
+            mouseout: () => {
+              setHoveredLinkId((prev) => (prev === link.id ? null : prev));
+            },
+            click: (event) => {
+              setSelectedNodeId(null);
+              setFocusRequestId(null);
+              setSelectedLinkId(link.id);
+              event.target?.openPopup?.();
+            },
+          }}
+          pathOptions={{
+            color: '#ffffff',
+            weight: isSelectedLink ? 18 : (isHoveredLink ? 16 : 14),
+            opacity: 0,
+            className: `link-hit-area${isHoveredLink ? ' link-hit-area--hover' : ''}${isSelectedLink ? ' link-hit-area--selected' : ''}`,
+            interactive: true,
+          }}
+        >
+          {linkPopupContent}
+>>>>>>> codex-save-1
         </Polyline>
       </React.Fragment>
     );
@@ -631,7 +964,14 @@ function App() {
         />
       </div>
 
+<<<<<<< HEAD
       <div className="absolute left-[104px] top-5 z-[1000] w-[320px] rounded-2xl border border-white/20 bg-[#07182fcc] p-3 text-xs text-slate-100 backdrop-blur-xl shadow-2xl">
+=======
+      <div
+        className="absolute top-5 z-[1000] w-[320px] rounded-2xl border border-white/20 bg-[#07182fcc] p-3 text-xs text-slate-100 backdrop-blur-xl shadow-2xl"
+        style={{ left: sidebarCollapsed ? 96 : 336 }}
+      >
+>>>>>>> codex-save-1
         <p className="tracking-[0.2em] uppercase text-[10px] text-cyan-200/90">Phase 1 Controls</p>
         <div className="mt-2 flex gap-2">
           <input
@@ -672,6 +1012,19 @@ function App() {
         <div className="mt-3 text-[11px] text-slate-300">
           Visible: {visibleNodes.length} nodes / {visibleLinks.length} links / {crossLayerRelations.length} relations
         </div>
+<<<<<<< HEAD
+=======
+        <div className="mt-1 text-[11px] text-slate-300">
+          Data Source: {dataSource === 'api' ? 'REST API' : 'Local Mock'}
+          {situationCurrent ? ` | Health: ${situationCurrent.healthScore}` : ''}
+          {events.length ? ` | Events: ${events.length}` : ''}
+        </div>
+        {apiError ? (
+          <div className="mt-1 text-[11px] text-amber-200">
+            API fallback: {apiError}
+          </div>
+        ) : null}
+>>>>>>> codex-save-1
         {selectedLink ? (
           <div className="mt-2 rounded-lg border border-white/15 bg-white/5 p-2 text-[11px]">
             <div className="font-semibold text-slate-100">Selected Link: {selectedLink.id}</div>
@@ -712,6 +1065,7 @@ function App() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution="&copy; OpenStreetMap contributors"
           />
+          {nodeHaloElements}
           {markerElements}
           {linkElements}
         </MapContainer>

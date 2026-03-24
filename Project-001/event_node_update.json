@@ -1,0 +1,22 @@
+{
+  "timestamp": 1773478840040,
+  "eventType": "NODE_UPDATE",
+  "payload": {
+    "nodeId": "A4",
+    "changes": {
+      "state": {
+        "online": true,
+        "status": "busy",
+        "lastSeen": 1773478840040
+      },
+      "metrics": {
+        "cpu": 0.66,
+        "load": 0.72,
+        "cache": 0.0,
+        "energy": 55,
+        "capacity": 200
+      },
+      "alarmLevel": "normal"
+    }
+  }
+}
