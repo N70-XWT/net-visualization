@@ -1,5 +1,5 @@
 {
-  "timestamp": 1773478840040,
+  "timestamp": 1774372907567,
   "eventType": "LINK_UPDATE",
   "payload": {
     "linkId": "L-A4-U8",
@@ -7,13 +7,13 @@
     "to": "U8",
     "changes": {
       "bandwidthMbps": 20,
-      "utilization": 0.61,
-      "delayMs": 20,
-      "lossRate": 0.06,
-      "snrDb": 12,
-      "health": "warning",
+      "utilization": 0.815,
+      "delayMs": 64.03,
+      "lossRate": 0.043,
+      "snrDb": 19.42,
+      "health": "danger",
       "state": "up",
-      "lastUpdate": 1773478840040
+      "lastUpdate": 1774372907567
     }
   }
 }

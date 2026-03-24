@@ -1,5 +1,13 @@
 # Getting Started with Create React App
 
+## Python data integration
+
+This project includes a Python export pipeline integrated through the Node backend adapter.
+
+See full instructions in:
+
+- [PYTHON_INTEGRATION.md](./PYTHON_INTEGRATION.md)
+
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
 ## Available Scripts

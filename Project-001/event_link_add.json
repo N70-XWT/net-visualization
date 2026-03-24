@@ -1,0 +1,20 @@
+{
+  "timestamp": 1774372907567,
+  "eventType": "LINK_ADD",
+  "payload": {
+    "link": {
+      "id": "L-A5-U-LIVE-155",
+      "from": "A5",
+      "to": "U-LIVE-155",
+      "type": "wireless",
+      "bandwidthMbps": 20.0,
+      "utilization": 0.639,
+      "delayMs": 11.29,
+      "lossRate": 0.0186,
+      "snrDb": 16.25,
+      "health": "warning",
+      "state": "up",
+      "lastUpdate": 1774372907567
+    }
+  }
+}

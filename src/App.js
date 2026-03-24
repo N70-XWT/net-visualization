@@ -1,10 +1,6 @@
 import './App.css';
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-<<<<<<< HEAD
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
-=======
 import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMap } from 'react-leaflet';
->>>>>>> codex-save-1
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -13,16 +9,16 @@ import Map3DView from './Map3DView';
 
 import { mockTopology } from './services/mockTopologyData';
 import { buildInitialNodeState } from './services/mockNodeStream';
-<<<<<<< HEAD
-=======
 import {
+  getAlerts,
   getEvents,
   getLinkById,
   getNodeById,
+  getPlaybackFrames,
+  sendPythonCommand,
   getSituationCurrent,
   getTopology,
 } from './services/networkApi';
->>>>>>> codex-save-1
 
 import groundStationIconUrl from './assets/icons/ground-station.svg';
 import uavIconUrl from './assets/icons/uav.svg';
@@ -43,6 +39,31 @@ const LAYER_OPTIONS = [
   { key: 'mesh', label: 'Mesh' },
   { key: 'edge', label: 'Edge' },
 ];
+const POLLING_INTERVAL_MS = Math.max(
+  2000,
+  Number.parseInt(process.env.REACT_APP_TOPOLOGY_POLLING_MS || '5000', 10) || 5000
+);
+const PLAYBACK_FRAME_FETCH_LIMIT = 50;
+const PLAYBACK_STEP_INTERVAL_MS = 1000;
+const CONTROL_PANEL_COLLAPSED_STORAGE_KEY = 'netviz:control-panel-collapsed';
+const CONTROL_PANEL_SECTIONS_STORAGE_KEY = 'netviz:control-panel-sections';
+const CONTROL_PANEL_SECTION_DEFAULTS = {
+  search: true,
+  playback: true,
+  python: false,
+  kpi: true,
+  alerts: false,
+};
+const NODE_SEVERITY_COLORS = {
+  normal: '#35f29a',
+  warning: '#f4c84a',
+  critical: '#f95d5d',
+};
+const ALERT_SEVERITY_COLORS = {
+  info: '#67e8f9',
+  warning: '#f4c84a',
+  critical: '#f95d5d',
+};
 
 const ICON_CACHE = {};
 
@@ -87,6 +108,97 @@ function buildNodeMap(nodes) {
   }, {});
 }
 
+function formatTimestamp(isoString) {
+  if (!isoString) {
+    return '-';
+  }
+  const parsed = new Date(isoString);
+  if (Number.isNaN(parsed.getTime())) {
+    return '-';
+  }
+  return parsed.toLocaleTimeString();
+}
+
+function toFiniteNumberOrNull(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatMetricNumber(value, fractionDigits = 1) {
+  if (!Number.isFinite(value)) {
+    return '-';
+  }
+  return value.toFixed(fractionDigits);
+}
+
+function formatMetricPercent(value, fractionDigits = 1) {
+  if (!Number.isFinite(value)) {
+    return '-';
+  }
+  return `${(value * 100).toFixed(fractionDigits)}%`;
+}
+
+function normalizeAlertSeverity(rawSeverity) {
+  const severity = String(rawSeverity || '').toLowerCase();
+  if (severity === 'critical') {
+    return 'critical';
+  }
+  if (severity === 'warning' || severity === 'major') {
+    return 'warning';
+  }
+  return 'info';
+}
+
+function getAlertSeverityColor(rawSeverity) {
+  const severity = normalizeAlertSeverity(rawSeverity);
+  return ALERT_SEVERITY_COLORS[severity] || ALERT_SEVERITY_COLORS.info;
+}
+
+function getNodeSeverity(nodeLike) {
+  const online = nodeLike?.state?.online;
+  const status = String(nodeLike?.state?.status || '').toLowerCase();
+  const alarmLevel = String(nodeLike?.alarmLevel || '').toLowerCase();
+
+  if (online === false || status === 'offline' || status === 'error' || status === 'down' || alarmLevel === 'danger') {
+    return 'critical';
+  }
+  if (status === 'warning' || status === 'busy' || status === 'degraded' || alarmLevel === 'warning') {
+    return 'warning';
+  }
+  return 'normal';
+}
+
+function getNodeSeverityColor(nodeLike) {
+  return NODE_SEVERITY_COLORS[getNodeSeverity(nodeLike)] || NODE_SEVERITY_COLORS.normal;
+}
+
+function buildFrontendDemoNode(nodeId) {
+  const lat = 34.2 + Math.random() * 0.1;
+  const lng = 108.9 + Math.random() * 0.16;
+  return {
+    id: nodeId,
+    name: `FE-${nodeId}`,
+    type: 'terminal',
+    layer: 'access',
+    location: {
+      geo: {
+        lat: Number(lat.toFixed(6)),
+        lng: Number(lng.toFixed(6)),
+        altitude: 0,
+      },
+    },
+    state: {
+      online: true,
+      status: 'online',
+    },
+    energy: 80,
+    capacity: 50,
+    cpu: 0.2,
+    load: 0.25,
+    role: 'user',
+  };
+}
+
 function getNodePosition(node) {
   if (!node || !node.location || !node.location.geo) {
     return null;
@@ -128,18 +240,28 @@ function getLinkStyle(link) {
 }
 
 function getLinkHealthColor(link) {
-  const lossRate = typeof link.lossRate === 'number' ? link.lossRate : null;
-  const snrDb = typeof link.snrDb === 'number' ? link.snrDb : null;
-
-  const isCriticalLoss = lossRate !== null && lossRate >= 0.03;
-  const isWarningLoss = lossRate !== null && lossRate >= 0.015;
-  const isCriticalSnr = snrDb !== null && snrDb < 10;
-  const isWarningSnr = snrDb !== null && snrDb < 18;
-
-  if (isCriticalLoss || isCriticalSnr) {
+  const state = String(link?.state || 'up').toLowerCase();
+  if (state !== 'up') {
     return '#f95d5d';
   }
-  if (isWarningLoss || isWarningSnr) {
+
+  const delayMs = typeof link.delayMs === 'number' ? link.delayMs : null;
+  const lossRate = typeof link.lossRate === 'number' ? link.lossRate : null;
+  const utilization = typeof link.utilization === 'number' ? link.utilization : null;
+  const snrDb = typeof link.snrDb === 'number' ? link.snrDb : null;
+
+  const isCriticalDelay = delayMs !== null && delayMs >= 60;
+  const isWarningDelay = delayMs !== null && delayMs >= 25;
+  const isCriticalLoss = lossRate !== null && lossRate >= 0.08;
+  const isWarningLoss = lossRate !== null && lossRate >= 0.03;
+  const isCriticalSnr = snrDb !== null && snrDb < 10;
+  const isWarningSnr = snrDb !== null && snrDb < 18;
+  const isWarningUtilization = utilization !== null && utilization >= 0.85;
+
+  if (isCriticalDelay || isCriticalLoss || isCriticalSnr) {
+    return '#f95d5d';
+  }
+  if (isWarningDelay || isWarningLoss || isWarningSnr || isWarningUtilization) {
     return '#f4c84a';
   }
   return '#35f29a';
@@ -205,12 +327,36 @@ function NodePopupContent({ node, typeMeta, nodeStateRef }) {
   );
 }
 
+function CollapsibleSection({ title, isOpen, onToggle, children, className = '' }) {
+  return (
+    <div className={`rounded-lg border border-white/15 bg-white/5 p-2 text-[11px] ${className}`}>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between rounded-md px-1 py-1 text-left transition-colors hover:bg-white/10"
+        aria-expanded={isOpen}
+      >
+        <span className="font-semibold text-slate-100">{title}</span>
+        <span
+          className={`inline-block text-[12px] text-slate-300 transition-transform duration-200 ${
+            isOpen ? 'rotate-0' : '-rotate-90'
+          }`}
+        >
+          ▾
+        </span>
+      </button>
+      <div
+        className={`overflow-hidden transition-all duration-300 ease-out ${
+          isOpen ? 'mt-2 max-h-[900px] opacity-100' : 'mt-0 max-h-0 opacity-0'
+        }`}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function App() {
-<<<<<<< HEAD
-  const baseNodes = useMemo(() => mockTopology.nodes, []);
-  const links = useMemo(() => mockTopology.links, []);
-  const crossLayerRelations = useMemo(() => mockTopology.crossLayerRelations, []);
-=======
   const [topologyData, setTopologyData] = useState(() => ({
     nodes: mockTopology.nodes,
     links: mockTopology.links,
@@ -220,22 +366,104 @@ function App() {
   const [apiError, setApiError] = useState('');
   const [situationCurrent, setSituationCurrent] = useState(null);
   const [events, setEvents] = useState([]);
+  const [alerts, setAlerts] = useState([]);
   const [nodeDetailsById, setNodeDetailsById] = useState({});
   const [linkDetailsById, setLinkDetailsById] = useState({});
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshAt, setLastRefreshAt] = useState(null);
+  const [commandNodeId, setCommandNodeId] = useState('');
+  const [commandNodeStatus, setCommandNodeStatus] = useState('busy');
+  const [commandBusy, setCommandBusy] = useState(false);
+  const [commandResult, setCommandResult] = useState('');
+  const [playbackMode, setPlaybackMode] = useState('live');
+  const [playbackFrames, setPlaybackFrames] = useState([]);
+  const [playbackFrameIndex, setPlaybackFrameIndex] = useState(0);
+  const [playbackPlaying, setPlaybackPlaying] = useState(false);
+  const [playbackLoading, setPlaybackLoading] = useState(false);
+  const [playbackError, setPlaybackError] = useState('');
+  const [controlPanelCollapsed, setControlPanelCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem(CONTROL_PANEL_COLLAPSED_STORAGE_KEY) === '1';
+    } catch (_error) {
+      return false;
+    }
+  });
+  const [controlPanelSections, setControlPanelSections] = useState(() => {
+    try {
+      const stored = window.localStorage.getItem(CONTROL_PANEL_SECTIONS_STORAGE_KEY);
+      if (!stored) {
+        return CONTROL_PANEL_SECTION_DEFAULTS;
+      }
+      const parsed = JSON.parse(stored);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return CONTROL_PANEL_SECTION_DEFAULTS;
+      }
+      return {
+        ...CONTROL_PANEL_SECTION_DEFAULTS,
+        ...parsed,
+      };
+    } catch (_error) {
+      return CONTROL_PANEL_SECTION_DEFAULTS;
+    }
+  });
+  const refreshInFlightRef = useRef(false);
+
+  const activePlaybackFrame = useMemo(() => {
+    if (playbackMode !== 'playback') {
+      return null;
+    }
+    if (!playbackFrames.length) {
+      return null;
+    }
+    return playbackFrames[playbackFrameIndex] || null;
+  }, [playbackFrameIndex, playbackFrames, playbackMode]);
+
+  const effectiveTopologyData = useMemo(() => {
+    if (playbackMode === 'playback') {
+      const frameTopology = activePlaybackFrame?.topology || {};
+      return {
+        nodes: Array.isArray(frameTopology.nodes) ? frameTopology.nodes : [],
+        links: Array.isArray(frameTopology.links) ? frameTopology.links : [],
+        crossLayerRelations: Array.isArray(frameTopology.crossLayerRelations)
+          ? frameTopology.crossLayerRelations
+          : [],
+      };
+    }
+    return topologyData;
+  }, [activePlaybackFrame, playbackMode, topologyData]);
+
+  const effectiveSituationCurrent = playbackMode === 'playback'
+    ? (activePlaybackFrame?.situation || null)
+    : situationCurrent;
+  const effectiveEvents = useMemo(() => {
+    if (playbackMode === 'playback') {
+      return Array.isArray(activePlaybackFrame?.events) ? activePlaybackFrame.events : [];
+    }
+    return events;
+  }, [activePlaybackFrame, events, playbackMode]);
+  const effectiveAlerts = useMemo(() => {
+    if (playbackMode === 'playback') {
+      return Array.isArray(activePlaybackFrame?.alerts) ? activePlaybackFrame.alerts : [];
+    }
+    return alerts;
+  }, [activePlaybackFrame, alerts, playbackMode]);
 
   const baseNodes = useMemo(
-    () => (Array.isArray(topologyData.nodes) ? topologyData.nodes : []),
-    [topologyData.nodes]
+    () => (Array.isArray(effectiveTopologyData.nodes) ? effectiveTopologyData.nodes : []),
+    [effectiveTopologyData.nodes]
   );
   const links = useMemo(
-    () => (Array.isArray(topologyData.links) ? topologyData.links : []),
-    [topologyData.links]
+    () => (Array.isArray(effectiveTopologyData.links) ? effectiveTopologyData.links : []),
+    [effectiveTopologyData.links]
   );
   const crossLayerRelations = useMemo(
-    () => (Array.isArray(topologyData.crossLayerRelations) ? topologyData.crossLayerRelations : []),
-    [topologyData.crossLayerRelations]
+    () => (
+      Array.isArray(effectiveTopologyData.crossLayerRelations)
+        ? effectiveTopologyData.crossLayerRelations
+        : []
+    ),
+    [effectiveTopologyData.crossLayerRelations]
   );
->>>>>>> codex-save-1
 
   const markerRefsById = useRef({});
   const linkPolylineRefsById = useRef({});
@@ -246,13 +474,9 @@ function App() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
-<<<<<<< HEAD
-  const [selectedLinkId, setSelectedLinkId] = useState(null);
-=======
   const [hoveredNodeId, setHoveredNodeId] = useState(null);
   const [selectedLinkId, setSelectedLinkId] = useState(null);
   const [hoveredLinkId, setHoveredLinkId] = useState(null);
->>>>>>> codex-save-1
   const [focusRequestId, setFocusRequestId] = useState(null);
   const [mapViewMode, setMapViewMode] = useState('2d');
   const [searchInput, setSearchInput] = useState('');
@@ -288,20 +512,59 @@ function App() {
     });
   }, [links, visibleNodeSet]);
 
-<<<<<<< HEAD
-  const selectedLink = useMemo(
-    () => visibleLinks.find((item) => item.id === selectedLinkId) || null,
-    [selectedLinkId, visibleLinks]
-  );
-=======
   const selectedLink = useMemo(() => {
     const matched = visibleLinks.find((item) => item.id === selectedLinkId);
     if (!matched) {
       return null;
     }
+    if (playbackMode === 'playback') {
+      return matched;
+    }
     return linkDetailsById[selectedLinkId] || matched;
-  }, [linkDetailsById, selectedLinkId, visibleLinks]);
->>>>>>> codex-save-1
+  }, [linkDetailsById, playbackMode, selectedLinkId, visibleLinks]);
+
+  const kpiData = useMemo(() => {
+    const totalNodes = baseNodes.length;
+    const onlineNodes = baseNodes.filter((node) => getNodeSeverity(node) !== 'critical').length;
+    const activeAlerts = effectiveAlerts.filter((alertItem) => alertItem?.active !== false).length;
+
+    const delayValues = links
+      .map((link) => toFiniteNumberOrNull(link.delayMs))
+      .filter((value) => value !== null);
+    const lossValues = links
+      .map((link) => toFiniteNumberOrNull(link.lossRate))
+      .filter((value) => value !== null);
+    const utilizationValues = links
+      .map((link) => toFiniteNumberOrNull(link.utilization))
+      .filter((value) => value !== null);
+
+    const avgDelayFromLinks = delayValues.length
+      ? delayValues.reduce((sum, value) => sum + value, 0) / delayValues.length
+      : null;
+    const avgLossFromLinks = lossValues.length
+      ? lossValues.reduce((sum, value) => sum + value, 0) / lossValues.length
+      : null;
+    const avgUtilizationFromLinks = utilizationValues.length
+      ? utilizationValues.reduce((sum, value) => sum + value, 0) / utilizationValues.length
+      : null;
+
+    const pythonMetrics = effectiveSituationCurrent?.pythonMetrics || {};
+    const avgDelay = toFiniteNumberOrNull(pythonMetrics.avgDelay) ?? avgDelayFromLinks;
+    const avgLoss = toFiniteNumberOrNull(pythonMetrics.avgLoss) ?? avgLossFromLinks;
+    const avgUtilization =
+      toFiniteNumberOrNull(pythonMetrics.avgUtilization) ??
+      toFiniteNumberOrNull(pythonMetrics.avgLoad) ??
+      avgUtilizationFromLinks;
+
+    return {
+      totalNodes,
+      onlineNodes,
+      activeAlerts,
+      avgDelay,
+      avgLoss,
+      avgUtilization,
+    };
+  }, [baseNodes, effectiveAlerts, effectiveSituationCurrent, links]);
 
   const getDynamicNodeGeo = useCallback((nodeId) => {
     const dynGeo = nodeStateRef.current[nodeId]?.location?.geo;
@@ -362,83 +625,179 @@ function App() {
     nodeStateRef.current = buildInitialNodeState(baseNodes);
   }, [baseNodes]);
 
-  useEffect(() => {
-<<<<<<< HEAD
-    if (selectedNodeId && !visibleNodeSet.has(selectedNodeId)) {
-      setSelectedNodeId(null);
-      setFocusRequestId(null);
-=======
-    let cancelled = false;
-
-    const loadTopology = async () => {
-      try {
-        const topology = await getTopology();
-        if (cancelled) {
-          return;
-        }
-
-        setTopologyData({
-          nodes: Array.isArray(topology?.nodes) ? topology.nodes : [],
-          links: Array.isArray(topology?.links) ? topology.links : [],
-          crossLayerRelations: Array.isArray(topology?.crossLayerRelations) ? topology.crossLayerRelations : [],
-        });
-        setDataSource('api');
-        setApiError('');
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-        setDataSource('mock');
-        setApiError(error?.message || 'Failed to load topology from REST API');
-      }
-    };
-
-    loadTopology();
-
-    return () => {
-      cancelled = true;
-    };
+  const loadTopologyFromApi = useCallback(async () => {
+    const topology = await getTopology();
+    setTopologyData({
+      nodes: Array.isArray(topology?.nodes) ? topology.nodes : [],
+      links: Array.isArray(topology?.links) ? topology.links : [],
+      crossLayerRelations: Array.isArray(topology?.crossLayerRelations) ? topology.crossLayerRelations : [],
+    });
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadSituationAndEvents = async () => {
-      try {
-        const [situation, eventItems] = await Promise.all([
-          getSituationCurrent(),
-          getEvents(20),
-        ]);
-        if (cancelled) {
-          return;
-        }
-
-        setSituationCurrent(situation || null);
-        setEvents(Array.isArray(eventItems) ? eventItems : []);
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-        // Keep this non-blocking for topology rendering.
-      }
-    };
-
-    loadSituationAndEvents();
-
-    return () => {
-      cancelled = true;
-    };
+  const loadSituationAndEventsFromApi = useCallback(async () => {
+    const [situation, eventItems, alertItems] = await Promise.all([
+      getSituationCurrent(),
+      getEvents(20),
+      getAlerts(50, true).catch(() => []),
+    ]);
+    setSituationCurrent(situation || null);
+    setEvents(Array.isArray(eventItems) ? eventItems : []);
+    setAlerts(Array.isArray(alertItems) ? alertItems : []);
   }, []);
 
+  const loadPlaybackFramesFromApi = useCallback(async (limit = PLAYBACK_FRAME_FETCH_LIMIT) => {
+    const playbackPayload = await getPlaybackFrames(limit);
+    const frames = Array.isArray(playbackPayload?.frames) ? playbackPayload.frames : [];
+    return frames;
+  }, []);
+
+  const refreshAllData = useCallback(async ({ silent = false } = {}) => {
+    if (playbackMode === 'playback') {
+      return;
+    }
+    if (refreshInFlightRef.current) {
+      return;
+    }
+    refreshInFlightRef.current = true;
+    if (!silent) {
+      setIsRefreshing(true);
+    }
+
+    let topologyLoaded = false;
+    let situationLoaded = false;
+    let topologyError = null;
+    let situationError = null;
+
+    try {
+      await loadTopologyFromApi();
+      topologyLoaded = true;
+      setDataSource('api');
+    } catch (error) {
+      topologyError = error;
+    }
+
+    try {
+      await loadSituationAndEventsFromApi();
+      situationLoaded = true;
+    } catch (error) {
+      situationError = error;
+    }
+
+    if (!topologyLoaded && !situationLoaded) {
+      setDataSource((prev) => (prev === 'api' ? prev : 'mock'));
+    }
+
+    const firstError = topologyError || situationError;
+    if (firstError) {
+      setApiError(firstError?.message || 'Failed to refresh data from REST API');
+    } else {
+      setApiError('');
+    }
+
+    if (topologyLoaded || situationLoaded) {
+      setLastRefreshAt(new Date().toISOString());
+    }
+
+    if (!silent) {
+      setIsRefreshing(false);
+    }
+    refreshInFlightRef.current = false;
+  }, [loadSituationAndEventsFromApi, loadTopologyFromApi, playbackMode]);
+
   useEffect(() => {
+    refreshAllData();
+  }, [refreshAllData]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      refreshAllData({ silent: true });
+    }, POLLING_INTERVAL_MS);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, [refreshAllData]);
+
+  useEffect(() => {
+    if (playbackMode !== 'playback') {
+      setPlaybackPlaying(false);
+      return;
+    }
+    if (!playbackFrames.length) {
+      setPlaybackPlaying(false);
+      setPlaybackFrameIndex(0);
+      return;
+    }
+    if (playbackFrameIndex >= playbackFrames.length) {
+      setPlaybackFrameIndex(playbackFrames.length - 1);
+    }
+  }, [playbackFrameIndex, playbackFrames.length, playbackMode]);
+
+  useEffect(() => {
+    if (playbackMode !== 'playback' || !playbackPlaying) {
+      return undefined;
+    }
+
+    const timer = setInterval(() => {
+      setPlaybackFrameIndex((prev) => {
+        if (prev >= playbackFrames.length - 1) {
+          setPlaybackPlaying(false);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, PLAYBACK_STEP_INTERVAL_MS);
+
+    return () => clearInterval(timer);
+  }, [playbackFrames.length, playbackMode, playbackPlaying]);
+
+  useEffect(() => {
+    if (playbackMode !== 'live') {
+      return;
+    }
+    refreshAllData({ silent: true });
+  }, [playbackMode, refreshAllData]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        CONTROL_PANEL_COLLAPSED_STORAGE_KEY,
+        controlPanelCollapsed ? '1' : '0'
+      );
+    } catch (_error) {
+      // Ignore localStorage errors in restricted environments.
+    }
+  }, [controlPanelCollapsed]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        CONTROL_PANEL_SECTIONS_STORAGE_KEY,
+        JSON.stringify(controlPanelSections)
+      );
+    } catch (_error) {
+      // Ignore localStorage errors in restricted environments.
+    }
+  }, [controlPanelSections]);
+
+  useEffect(() => {
+    if (!mapRef.current?.invalidateSize) {
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      mapRef.current?.invalidateSize?.();
+    }, 320);
+    return () => clearTimeout(timer);
+  }, [controlPanelCollapsed]);
+
+  useEffect(() => {
+    if (playbackMode === 'playback') {
+      return undefined;
+    }
     if (!selectedNodeId) {
       return undefined;
->>>>>>> codex-save-1
     }
-  }, [selectedNodeId, visibleNodeSet]);
 
-<<<<<<< HEAD
-=======
     let cancelled = false;
 
     getNodeById(selectedNodeId)
@@ -454,9 +813,12 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [selectedNodeId]);
+  }, [playbackMode, selectedNodeId]);
 
   useEffect(() => {
+    if (playbackMode === 'playback') {
+      return undefined;
+    }
     if (!selectedLinkId) {
       return undefined;
     }
@@ -476,7 +838,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [selectedLinkId]);
+  }, [playbackMode, selectedLinkId]);
 
   useEffect(() => {
     if (selectedNodeId && !visibleNodeSet.has(selectedNodeId)) {
@@ -491,21 +853,17 @@ function App() {
     }
   }, [hoveredNodeId, visibleNodeSet]);
 
->>>>>>> codex-save-1
   useEffect(() => {
     if (selectedLinkId && !visibleLinks.some((item) => item.id === selectedLinkId)) {
       setSelectedLinkId(null);
     }
   }, [selectedLinkId, visibleLinks]);
-<<<<<<< HEAD
-=======
 
   useEffect(() => {
     if (hoveredLinkId && !visibleLinks.some((item) => item.id === hoveredLinkId)) {
       setHoveredLinkId(null);
     }
   }, [hoveredLinkId, visibleLinks]);
->>>>>>> codex-save-1
 
   const handleToggleSidebar = useCallback((value) => {
     const nextCollapsed = !!value;
@@ -519,6 +877,23 @@ function App() {
   const handleSelectNode = useCallback((nodeId) => {
     setSelectedNodeId(nodeId);
     setFocusRequestId(nodeId);
+  }, []);
+
+  const handleAlertFocus = useCallback((alertItem) => {
+    if (!alertItem || typeof alertItem !== 'object') {
+      return;
+    }
+    if (alertItem.entityType === 'node' && alertItem.entityId) {
+      setSelectedLinkId(null);
+      setSelectedNodeId(alertItem.entityId);
+      setFocusRequestId(alertItem.entityId);
+      return;
+    }
+    if (alertItem.entityType === 'link' && alertItem.entityId) {
+      setSelectedNodeId(null);
+      setFocusRequestId(null);
+      setSelectedLinkId(alertItem.entityId);
+    }
   }, []);
 
   const handleLayerToggle = useCallback((layerKey) => {
@@ -564,6 +939,144 @@ function App() {
   const handleToggleMapViewMode = useCallback(() => {
     setMapViewMode((prev) => (prev === '2d' ? '3d' : '2d'));
   }, []);
+
+  const handleToggleControlPanel = useCallback(() => {
+    setControlPanelCollapsed((prev) => !prev);
+  }, []);
+
+  const handleToggleControlSection = useCallback((sectionKey) => {
+    setControlPanelSections((prev) => ({
+      ...prev,
+      [sectionKey]: !(prev[sectionKey] ?? CONTROL_PANEL_SECTION_DEFAULTS[sectionKey]),
+    }));
+  }, []);
+
+  const handleManualRefresh = useCallback(() => {
+    refreshAllData();
+  }, [refreshAllData]);
+
+  const handleTogglePlaybackMode = useCallback(async () => {
+    if (playbackMode === 'playback') {
+      setPlaybackPlaying(false);
+      setPlaybackError('');
+      setPlaybackMode('live');
+      return;
+    }
+
+    setPlaybackLoading(true);
+    setPlaybackPlaying(false);
+    setPlaybackError('');
+    try {
+      const frames = await loadPlaybackFramesFromApi(PLAYBACK_FRAME_FETCH_LIMIT);
+      if (!frames.length) {
+        setPlaybackError('No playback frames available yet. Please wait for polling to collect frames.');
+        return;
+      }
+
+      setPlaybackFrames(frames);
+      setPlaybackFrameIndex(Math.max(0, frames.length - 1));
+      setPlaybackMode('playback');
+      setPlaybackError('');
+    } catch (error) {
+      setPlaybackError(error?.message || 'Failed to load playback frames');
+    } finally {
+      setPlaybackLoading(false);
+    }
+  }, [loadPlaybackFramesFromApi, playbackMode]);
+
+  const handlePlaybackPlayPause = useCallback(() => {
+    if (playbackMode !== 'playback' || !playbackFrames.length) {
+      return;
+    }
+    if (!playbackPlaying && playbackFrameIndex >= playbackFrames.length - 1) {
+      setPlaybackFrameIndex(0);
+    }
+    setPlaybackPlaying((prev) => !prev);
+  }, [playbackFrameIndex, playbackFrames.length, playbackMode, playbackPlaying]);
+
+  const handlePlaybackPrevFrame = useCallback(() => {
+    if (playbackMode !== 'playback' || !playbackFrames.length) {
+      return;
+    }
+    setPlaybackPlaying(false);
+    setPlaybackFrameIndex((prev) => Math.max(0, prev - 1));
+  }, [playbackFrames.length, playbackMode]);
+
+  const handlePlaybackNextFrame = useCallback(() => {
+    if (playbackMode !== 'playback' || !playbackFrames.length) {
+      return;
+    }
+    setPlaybackPlaying(false);
+    setPlaybackFrameIndex((prev) => Math.min(playbackFrames.length - 1, prev + 1));
+  }, [playbackFrames.length, playbackMode]);
+
+  const handlePlaybackSliderChange = useCallback((event) => {
+    const nextIndex = Number.parseInt(event.target.value, 10);
+    if (!Number.isFinite(nextIndex)) {
+      return;
+    }
+    setPlaybackPlaying(false);
+    setPlaybackFrameIndex(nextIndex);
+  }, []);
+
+  const submitPythonCommand = useCallback(async (command) => {
+    if (commandBusy) {
+      return;
+    }
+    setCommandBusy(true);
+    setCommandResult('');
+    try {
+      const created = await sendPythonCommand(command);
+      setCommandResult(`Queued ${created.type} (${created.id})`);
+      await refreshAllData();
+    } catch (error) {
+      setCommandResult(error?.message || 'Failed to queue command');
+    } finally {
+      setCommandBusy(false);
+    }
+  }, [commandBusy, refreshAllData]);
+
+  const handleAddNodeCommand = useCallback(() => {
+    const inputId = commandNodeId.trim();
+    const nodeId = inputId || `U-FE-${String(Date.now()).slice(-6)}`;
+    setCommandNodeId(nodeId);
+    submitPythonCommand({
+      type: 'node:add',
+      payload: {
+        node: buildFrontendDemoNode(nodeId),
+      },
+    });
+  }, [commandNodeId, submitPythonCommand]);
+
+  const handleRemoveNodeCommand = useCallback(() => {
+    const nodeId = commandNodeId.trim();
+    if (!nodeId) {
+      setCommandResult('Please input node id first');
+      return;
+    }
+    submitPythonCommand({
+      type: 'node:remove',
+      payload: {
+        nodeId,
+      },
+    });
+  }, [commandNodeId, submitPythonCommand]);
+
+  const handleUpdateNodeStatusCommand = useCallback(() => {
+    const nodeId = commandNodeId.trim();
+    if (!nodeId) {
+      setCommandResult('Please input node id first');
+      return;
+    }
+    submitPythonCommand({
+      type: 'node:update',
+      payload: {
+        nodeId,
+        status: commandNodeStatus,
+        online: commandNodeStatus !== 'offline',
+      },
+    });
+  }, [commandNodeId, commandNodeStatus, submitPythonCommand]);
 
   useEffect(() => {
     Object.entries(markerRefsById.current).forEach(([nodeId, marker]) => {
@@ -699,10 +1212,6 @@ function App() {
     return null;
   }
 
-<<<<<<< HEAD
-  const markerElements = useMemo(() => visibleNodes.map((node) => {
-    const typeMeta = NODE_TYPE_META[node.type] || { label: node.type || 'Unknown', color: '#7f7f7f' };
-=======
   const nodeHaloElements = useMemo(() => visibleNodes.map((node) => {
     const position = getNodePosition(node);
     if (!position) {
@@ -711,6 +1220,11 @@ function App() {
 
     const isSelected = selectedNodeId === node.id;
     const isHovered = hoveredNodeId === node.id && !isSelected;
+    const dynamicNode = nodeStateRef.current[node.id];
+    const statusSource = dynamicNode && dynamicNode.state
+      ? { ...node, state: dynamicNode.state }
+      : node;
+    const nodeStatusColor = getNodeSeverityColor(statusSource);
 
     return (
       <CircleMarker
@@ -718,11 +1232,11 @@ function App() {
         center={position}
         radius={isSelected ? 21 : (isHovered ? 17 : 12)}
         pathOptions={{
-          color: '#9de7ff',
+          color: nodeStatusColor,
           weight: isSelected ? 2.8 : (isHovered ? 2.2 : 1.2),
-          opacity: isSelected ? 0.95 : (isHovered ? 0.72 : 0),
-          fillColor: '#5ef7c1',
-          fillOpacity: isSelected ? 0.22 : (isHovered ? 0.1 : 0),
+          opacity: isSelected ? 0.95 : (isHovered ? 0.76 : 0.45),
+          fillColor: nodeStatusColor,
+          fillOpacity: isSelected ? 0.22 : (isHovered ? 0.12 : 0.08),
           className: `node-halo${isHovered ? ' node-halo--hover' : ''}${isSelected ? ' node-halo--selected' : ''}`,
           interactive: false,
         }}
@@ -731,9 +1245,8 @@ function App() {
   }), [hoveredNodeId, selectedNodeId, visibleNodes]);
 
   const markerElements = useMemo(() => visibleNodes.map((node) => {
-    const popupNode = nodeDetailsById[node.id] || node;
+    const popupNode = playbackMode === 'playback' ? node : (nodeDetailsById[node.id] || node);
     const typeMeta = NODE_TYPE_META[popupNode.type] || { label: popupNode.type || 'Unknown', color: '#7f7f7f' };
->>>>>>> codex-save-1
     const position = getNodePosition(node);
     if (!position) {
       return null;
@@ -749,8 +1262,6 @@ function App() {
             handleSelectNode(node.id);
             event.target?.openPopup?.();
           },
-<<<<<<< HEAD
-=======
           popupclose: () => {
             setSelectedNodeId((prev) => (prev === node.id ? null : prev));
             setFocusRequestId((prev) => (prev === node.id ? null : prev));
@@ -759,7 +1270,6 @@ function App() {
           mouseout: () => {
             setHoveredNodeId((prev) => (prev === node.id ? null : prev));
           },
->>>>>>> codex-save-1
         }}
         ref={(marker) => {
           if (marker) {
@@ -780,16 +1290,10 @@ function App() {
         </Popup>
       </Marker>
     );
-<<<<<<< HEAD
-  }), [applyMarkerAltitudeVisual, handleSelectNode, visibleNodes]);
+  }), [applyMarkerAltitudeVisual, applyMarkerInteractiveVisual, handleSelectNode, nodeDetailsById, playbackMode, visibleNodes]);
 
   const linkElements = visibleLinks.map((link) => {
-=======
-  }), [applyMarkerAltitudeVisual, applyMarkerInteractiveVisual, handleSelectNode, nodeDetailsById, visibleNodes]);
-
-  const linkElements = visibleLinks.map((link) => {
-    const linkDetail = linkDetailsById[link.id] || link;
->>>>>>> codex-save-1
+    const linkDetail = playbackMode === 'playback' ? link : (linkDetailsById[link.id] || link);
     const fromPosition = getDynamicNodePosition(link.from);
     const toPosition = getDynamicNodePosition(link.to);
     if (!fromPosition || !toPosition) {
@@ -804,11 +1308,16 @@ function App() {
       mapViewMode === '3d'
     );
 
-    const healthColor = getLinkHealthColor(link);
+    const healthColor = getLinkHealthColor(linkDetail);
     const flowClass = `link-line link-line--flow ${getLinkFlowSpeedClass(link)}`;
     const baseOpacity = typeof link.availability === 'number'
       ? Math.min(1, Math.max(0.4, link.availability))
       : 0.8;
+    const linkState = String(linkDetail?.state || link?.state || 'up').toLowerCase();
+    const isLinkDown = linkState !== 'up';
+    const linkDashArray = isLinkDown ? '10 10' : null;
+    const healthOpacity = isLinkDown ? Math.min(baseOpacity, 0.55) : baseOpacity;
+    const flowOpacity = isLinkDown ? 0.55 : undefined;
 
     const healthLineRefCallback = (polyline) => {
       if (polyline && !linkPolylineRefsById.current[link.id]) {
@@ -828,10 +1337,6 @@ function App() {
       }
     };
 
-<<<<<<< HEAD
-    const isSelectedLink = selectedLinkId === link.id;
-    const highlightWeight = isSelectedLink ? 4.4 : 3;
-=======
     const baseLinkStyle = getLinkStyle(link);
     const isSelectedLink = selectedLinkId === link.id;
     const isHoveredLink = hoveredLinkId === link.id && !isSelectedLink;
@@ -845,14 +1350,15 @@ function App() {
           <div className="mt-1">From: {linkDetail.from}</div>
           <div>To: {linkDetail.to}</div>
           <div>Type: {linkDetail.type}</div>
+          <div>State: {linkState}</div>
           <div>Bandwidth: {linkDetail.bandwidthMbps ?? '-'} Mbps</div>
           <div>Delay: {linkDetail.delayMs ?? '-'} ms</div>
           <div>Loss: {typeof linkDetail.lossRate === 'number' ? `${(linkDetail.lossRate * 100).toFixed(2)}%` : '-'}</div>
+          <div>Utilization: {typeof linkDetail.utilization === 'number' ? `${(linkDetail.utilization * 100).toFixed(1)}%` : '-'}</div>
           <div>SNR: {typeof linkDetail.snrDb === 'number' ? `${linkDetail.snrDb} dB` : '-'}</div>
         </div>
       </Popup>
     );
->>>>>>> codex-save-1
 
     return (
       <React.Fragment key={link.id}>
@@ -874,14 +1380,10 @@ function App() {
           pathOptions={{
             ...baseLinkStyle,
             color: healthColor,
-            opacity: baseOpacity,
-<<<<<<< HEAD
-            className: 'link-line link-line--health',
-            weight: isSelectedLink ? 3.4 : getLinkStyle(link).weight,
-=======
+            opacity: healthOpacity,
+            dashArray: linkDashArray || baseLinkStyle.dashArray,
             className: `link-line link-line--health${linkStateClass}`,
             weight: isSelectedLink ? 4.4 : (isHoveredLink ? 3.4 : baseLinkStyle.weight),
->>>>>>> codex-save-1
             interactive: false,
           }}
         />
@@ -897,25 +1399,8 @@ function App() {
           pathOptions={{
             color: healthColor,
             weight: highlightWeight,
-<<<<<<< HEAD
-            opacity: 0.9,
-            className: flowClass,
-          }}
-        >
-          <Popup>
-            <div className="text-sm text-slate-900">
-              <div className="text-base font-semibold">Link {link.id}</div>
-              <div className="mt-1">From: {link.from}</div>
-              <div>To: {link.to}</div>
-              <div>Type: {link.type}</div>
-              <div>Bandwidth: {link.bandwidthMbps ?? '-'} Mbps</div>
-              <div>Delay: {link.delayMs ?? '-'} ms</div>
-              <div>Loss: {typeof link.lossRate === 'number' ? `${(link.lossRate * 100).toFixed(2)}%` : '-'}</div>
-              <div>SNR: {typeof link.snrDb === 'number' ? `${link.snrDb} dB` : '-'}</div>
-            </div>
-          </Popup>
-=======
-            opacity: isSelectedLink ? 1 : (isHoveredLink ? 0.95 : 0.88),
+            opacity: isSelectedLink ? 1 : (isHoveredLink ? 0.95 : (flowOpacity ?? 0.88)),
+            dashArray: isLinkDown ? '2 16' : undefined,
             className: `${flowClass}${linkStateClass}`,
             interactive: false,
           }}
@@ -943,7 +1428,6 @@ function App() {
           }}
         >
           {linkPopupContent}
->>>>>>> codex-save-1
         </Polyline>
       </React.Fragment>
     );
@@ -964,36 +1448,218 @@ function App() {
         />
       </div>
 
-<<<<<<< HEAD
-      <div className="absolute left-[104px] top-5 z-[1000] w-[320px] rounded-2xl border border-white/20 bg-[#07182fcc] p-3 text-xs text-slate-100 backdrop-blur-xl shadow-2xl">
-=======
       <div
-        className="absolute top-5 z-[1000] w-[320px] rounded-2xl border border-white/20 bg-[#07182fcc] p-3 text-xs text-slate-100 backdrop-blur-xl shadow-2xl"
+        className={`absolute top-5 z-[1000] rounded-2xl border border-white/20 bg-[#07182fcc] text-xs text-slate-100 backdrop-blur-xl shadow-2xl transition-all duration-300 ease-out ${
+          controlPanelCollapsed ? 'w-14 p-2' : 'w-[320px] p-3'
+        }`}
         style={{ left: sidebarCollapsed ? 96 : 336 }}
       >
->>>>>>> codex-save-1
-        <p className="tracking-[0.2em] uppercase text-[10px] text-cyan-200/90">Phase 1 Controls</p>
-        <div className="mt-2 flex gap-2">
-          <input
-            type="text"
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                handleSearchSubmit();
-              }
-            }}
-            className="w-full rounded-md border border-white/20 bg-white/10 px-2 py-1 text-xs text-slate-100 placeholder:text-slate-400 focus:outline-none"
-            placeholder="Search by node ID / name"
-          />
+        <div className={`flex items-center ${controlPanelCollapsed ? 'justify-center' : 'justify-between'} gap-2`}>
+          {!controlPanelCollapsed ? (
+            <p className="tracking-[0.2em] uppercase text-[10px] text-cyan-200/90">Phase 1 Controls</p>
+          ) : (
+            <span className="text-[9px] uppercase tracking-[0.18em] text-cyan-200/75">Ctl</span>
+          )}
           <button
             type="button"
-            onClick={handleSearchSubmit}
-            className="rounded-md border border-white/20 bg-white/10 px-2 py-1 text-xs hover:bg-white/20"
+            onClick={handleToggleControlPanel}
+            className="h-7 w-7 rounded-md border border-white/20 bg-white/10 text-[12px] text-slate-100 transition-colors hover:bg-white/20"
+            aria-label={controlPanelCollapsed ? 'Expand control panel' : 'Collapse control panel'}
+            title={controlPanelCollapsed ? 'Expand control panel' : 'Collapse control panel'}
           >
-            Go
+            {controlPanelCollapsed ? '>' : '<'}
           </button>
         </div>
+        {controlPanelCollapsed ? (
+          <div className="mt-3 flex h-[240px] flex-col items-center justify-start gap-2 text-[10px] text-slate-300">
+            <button
+              type="button"
+              onClick={handleManualRefresh}
+              className="h-7 w-7 rounded-md border border-cyan-300/40 bg-cyan-400/10 text-[10px] text-cyan-100 transition-colors hover:bg-cyan-400/20"
+              title="Refresh"
+              aria-label="Refresh"
+            >
+              R
+            </button>
+            <div className="w-full border-t border-white/10" />
+            <div className="rounded-md border border-white/15 bg-white/5 px-1.5 py-0.5">
+              {playbackMode === 'playback' ? 'PB' : 'LV'}
+            </div>
+            <div className="rounded-md border border-rose-300/25 bg-rose-400/10 px-1.5 py-0.5 text-rose-100">
+              {effectiveAlerts.length}A
+            </div>
+            <div className="rounded-md border border-emerald-300/25 bg-emerald-400/10 px-1.5 py-0.5 text-emerald-100">
+              {visibleNodes.length}N
+            </div>
+            <div className="rounded-md border border-white/15 bg-white/5 px-1.5 py-0.5 text-slate-200">
+              {visibleLinks.length}L
+            </div>
+          </div>
+        ) : (
+          <div className="mt-2 max-h-[calc(100vh-84px)] overflow-y-auto pr-1">
+        <CollapsibleSection
+          title="Search / Refresh"
+          isOpen={!!controlPanelSections.search}
+          onToggle={() => handleToggleControlSection('search')}
+        >
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  handleSearchSubmit();
+                }
+              }}
+              className="w-full rounded-md border border-white/20 bg-white/10 px-2 py-1 text-xs text-slate-100 placeholder:text-slate-400 focus:outline-none"
+              placeholder="Search by node ID / name"
+            />
+            <button
+              type="button"
+              onClick={handleSearchSubmit}
+              className="rounded-md border border-white/20 bg-white/10 px-2 py-1 text-xs hover:bg-white/20"
+            >
+              Go
+            </button>
+            <button
+              type="button"
+              onClick={handleManualRefresh}
+              className="rounded-md border border-cyan-300/40 bg-cyan-400/10 px-2 py-1 text-xs hover:bg-cyan-400/20"
+            >
+              {isRefreshing ? 'Refreshing' : 'Refresh'}
+            </button>
+          </div>
+        </CollapsibleSection>
+        <CollapsibleSection
+          title="History Playback"
+          isOpen={!!controlPanelSections.playback}
+          onToggle={() => handleToggleControlSection('playback')}
+          className="mt-3"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={handleTogglePlaybackMode}
+              disabled={playbackLoading}
+              className="rounded-md border border-cyan-300/40 bg-cyan-400/10 px-2 py-1 text-xs hover:bg-cyan-400/20 disabled:opacity-60"
+            >
+              {playbackLoading
+                ? 'Loading...'
+                : (playbackMode === 'playback' ? 'Back To Live' : 'Enter Playback')}
+            </button>
+            <div className="text-[10px] text-slate-300">
+              {playbackMode === 'playback' ? 'Playback Mode' : 'Live Mode'}
+            </div>
+          </div>
+          {playbackMode === 'playback' ? (
+            <div className="mt-2">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handlePlaybackPrevFrame}
+                  disabled={!playbackFrames.length}
+                  className="rounded-md border border-white/20 bg-white/10 px-2 py-1 text-xs hover:bg-white/20 disabled:opacity-60"
+                >
+                  Prev
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePlaybackPlayPause}
+                  disabled={!playbackFrames.length}
+                  className="rounded-md border border-emerald-300/40 bg-emerald-400/10 px-2 py-1 text-xs hover:bg-emerald-400/20 disabled:opacity-60"
+                >
+                  {playbackPlaying ? 'Pause' : 'Play'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePlaybackNextFrame}
+                  disabled={!playbackFrames.length}
+                  className="rounded-md border border-white/20 bg-white/10 px-2 py-1 text-xs hover:bg-white/20 disabled:opacity-60"
+                >
+                  Next
+                </button>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={Math.max(0, playbackFrames.length - 1)}
+                value={Math.min(playbackFrameIndex, Math.max(0, playbackFrames.length - 1))}
+                onChange={handlePlaybackSliderChange}
+                className="mt-2 w-full"
+                disabled={!playbackFrames.length}
+              />
+              <div className="mt-1 text-slate-300">
+                Frame {playbackFrames.length ? (playbackFrameIndex + 1) : 0}/{playbackFrames.length}
+                {' | '}
+                Time: {formatTimestamp(activePlaybackFrame?.timestamp)}
+              </div>
+              {playbackError ? (
+                <div className="mt-1 text-amber-200">{playbackError}</div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="mt-1 text-slate-300">
+              Live mode (polling enabled). Switch to Playback for history replay.
+              {playbackError ? ` ${playbackError}` : ''}
+            </div>
+          )}
+        </CollapsibleSection>
+        <CollapsibleSection
+          title="Python Command"
+          isOpen={!!controlPanelSections.python}
+          onToggle={() => handleToggleControlSection('python')}
+          className="mt-3"
+        >
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={commandNodeId}
+              onChange={(event) => setCommandNodeId(event.target.value)}
+              className="w-full rounded-md border border-white/20 bg-white/10 px-2 py-1 text-xs text-slate-100 placeholder:text-slate-400 focus:outline-none"
+              placeholder="Node ID (e.g. U-FE-001)"
+            />
+            <select
+              value={commandNodeStatus}
+              onChange={(event) => setCommandNodeStatus(event.target.value)}
+              className="rounded-md border border-white/20 bg-white/10 px-2 py-1 text-xs text-slate-100 focus:outline-none"
+            >
+              <option value="normal">normal</option>
+              <option value="busy">busy</option>
+              <option value="offline">offline</option>
+              <option value="error">error</option>
+            </select>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleAddNodeCommand}
+              disabled={commandBusy}
+              className="rounded-md border border-emerald-300/40 bg-emerald-400/10 px-2 py-1 text-xs hover:bg-emerald-400/20 disabled:opacity-60"
+            >
+              Add Node
+            </button>
+            <button
+              type="button"
+              onClick={handleRemoveNodeCommand}
+              disabled={commandBusy}
+              className="rounded-md border border-rose-300/40 bg-rose-400/10 px-2 py-1 text-xs hover:bg-rose-400/20 disabled:opacity-60"
+            >
+              Remove Node
+            </button>
+            <button
+              type="button"
+              onClick={handleUpdateNodeStatusCommand}
+              disabled={commandBusy}
+              className="rounded-md border border-amber-300/40 bg-amber-400/10 px-2 py-1 text-xs hover:bg-amber-400/20 disabled:opacity-60"
+            >
+              Update Status
+            </button>
+          </div>
+          {commandResult ? (
+            <div className="mt-2 text-[11px] text-cyan-200">{commandResult}</div>
+          ) : null}
+        </CollapsibleSection>
         <div className="mt-3 flex flex-wrap gap-2">
           {LAYER_OPTIONS.map((layer) => {
             const enabled = enabledLayerSet.has(layer.key);
@@ -1009,28 +1675,116 @@ function App() {
             );
           })}
         </div>
+        <CollapsibleSection
+          title="KPI"
+          isOpen={!!controlPanelSections.kpi}
+          onToggle={() => handleToggleControlSection('kpi')}
+          className="mt-3"
+        >
+          <div className="grid grid-cols-2 gap-2 text-[11px]">
+            <div className="rounded-lg border border-white/15 bg-white/5 p-2">
+              <div className="text-slate-300">Online Nodes</div>
+              <div className="mt-1 text-sm font-semibold text-emerald-200">
+                {kpiData.onlineNodes}/{kpiData.totalNodes}
+              </div>
+            </div>
+            <div className="rounded-lg border border-white/15 bg-white/5 p-2">
+              <div className="text-slate-300">Active Alerts</div>
+              <div className="mt-1 text-sm font-semibold text-rose-200">{kpiData.activeAlerts}</div>
+            </div>
+            <div className="rounded-lg border border-white/15 bg-white/5 p-2">
+              <div className="text-slate-300">Avg Delay</div>
+              <div className="mt-1 text-sm font-semibold text-cyan-100">
+                {formatMetricNumber(kpiData.avgDelay, 1)} ms
+              </div>
+            </div>
+            <div className="rounded-lg border border-white/15 bg-white/5 p-2">
+              <div className="text-slate-300">Avg Loss / Util</div>
+              <div className="mt-1 text-sm font-semibold text-cyan-100">
+                {formatMetricPercent(kpiData.avgLoss, 2)} / {formatMetricPercent(kpiData.avgUtilization, 1)}
+              </div>
+            </div>
+          </div>
+        </CollapsibleSection>
         <div className="mt-3 text-[11px] text-slate-300">
           Visible: {visibleNodes.length} nodes / {visibleLinks.length} links / {crossLayerRelations.length} relations
         </div>
-<<<<<<< HEAD
-=======
         <div className="mt-1 text-[11px] text-slate-300">
           Data Source: {dataSource === 'api' ? 'REST API' : 'Local Mock'}
-          {situationCurrent ? ` | Health: ${situationCurrent.healthScore}` : ''}
-          {events.length ? ` | Events: ${events.length}` : ''}
+          {playbackMode === 'playback' ? ' | Mode: Playback' : ' | Mode: Live'}
+          {effectiveSituationCurrent ? ` | Health: ${effectiveSituationCurrent.healthScore}` : ''}
+          {effectiveEvents.length ? ` | Events: ${effectiveEvents.length}` : ''}
+          {effectiveAlerts.length ? ` | Alerts: ${effectiveAlerts.length}` : ''}
         </div>
+        <div className="mt-1 text-[11px] text-slate-400">
+          {playbackMode === 'playback'
+            ? `Playback Frame Time: ${formatTimestamp(activePlaybackFrame?.timestamp)}`
+            : `Polling: ${Math.round(POLLING_INTERVAL_MS / 1000)}s${lastRefreshAt ? ` | Last refresh: ${formatTimestamp(lastRefreshAt)}` : ''}`}
+        </div>
+        {effectiveSituationCurrent?.pythonMetrics ? (
+          <div className="mt-1 text-[11px] text-slate-300">
+            Delay: {effectiveSituationCurrent.pythonMetrics.avgDelay} ms
+            {' | '}
+            Loss: {typeof effectiveSituationCurrent.pythonMetrics.avgLoss === 'number'
+              ? `${(effectiveSituationCurrent.pythonMetrics.avgLoss * 100).toFixed(2)}%`
+              : '-'}
+          </div>
+        ) : null}
         {apiError ? (
           <div className="mt-1 text-[11px] text-amber-200">
             API fallback: {apiError}
           </div>
         ) : null}
->>>>>>> codex-save-1
         {selectedLink ? (
           <div className="mt-2 rounded-lg border border-white/15 bg-white/5 p-2 text-[11px]">
             <div className="font-semibold text-slate-100">Selected Link: {selectedLink.id}</div>
             <div className="text-slate-300">{selectedLink.from} -&gt; {selectedLink.to}</div>
           </div>
         ) : null}
+        <CollapsibleSection
+          title="Recent Alerts"
+          isOpen={!!controlPanelSections.alerts}
+          onToggle={() => handleToggleControlSection('alerts')}
+          className="mt-2"
+        >
+          {effectiveAlerts.length ? (
+            <ul className="space-y-1 text-slate-300">
+              {effectiveAlerts.slice(0, 5).map((alertItem) => (
+                <li key={alertItem.id}>
+                  <button
+                    type="button"
+                    onClick={() => handleAlertFocus(alertItem)}
+                    className="w-full rounded border border-white/10 bg-white/5 p-1 text-left hover:bg-white/10"
+                  >
+                    <div style={{ color: getAlertSeverityColor(alertItem.severity) }}>
+                      [{normalizeAlertSeverity(alertItem.severity)}] {alertItem.title || alertItem.type}
+                    </div>
+                    <div className="text-slate-300">{alertItem.message}</div>
+                    <div className="text-[10px] text-slate-400">{formatTimestamp(alertItem.timestamp)}</div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="text-slate-400">No active alerts</div>
+          )}
+        </CollapsibleSection>
+        <div className="mt-2 rounded-lg border border-white/15 bg-white/5 p-2 text-[11px]">
+          <div className="font-semibold text-slate-100">Recent Events</div>
+          {effectiveEvents.length ? (
+            <ul className="mt-1 space-y-1 text-slate-300">
+              {effectiveEvents.slice(0, 4).map((eventItem) => (
+                <li key={eventItem.id}>
+                  [{eventItem.severity || 'info'}] {eventItem.message || eventItem.type} ({formatTimestamp(eventItem.occurredAt)})
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="mt-1 text-slate-400">No events</div>
+          )}
+        </div>
+          </div>
+        )}
       </div>
 
       <div className="map-mode-panel absolute right-5 top-5 z-[1000] rounded-2xl border border-white/20 bg-[#07182fcc] p-3 text-xs text-slate-100 backdrop-blur-xl shadow-2xl">

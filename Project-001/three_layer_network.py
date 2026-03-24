@@ -749,10 +749,21 @@ if __name__ == "__main__":
     event5 = net.event_node_remove("U11")
     print(net.to_json_str(event5))
 
+    print("\n演示 LINK_REMOVE 事件：")
+    event6 = net.event_link_remove("A4", "U8")
+    print(net.to_json_str(event6))
+
     # 保存 JSON 文件，方便联调
     net.save_json(snapshot, "snapshot.json")
     net.save_json(metrics_data, "metrics.json")
     net.save_json(event1, "event_node_update.json")
     net.save_json(event2, "event_link_update.json")
+    net.save_json(event3, "event_node_add.json")
+    net.save_json(event4, "event_link_add.json")
+    net.save_json(event5, "event_node_remove.json")
+    net.save_json(event6, "event_link_remove.json")
 
-    print("\n已导出文件：snapshot.json, metrics.json, event_node_update.json, event_link_update.json")
+    print(
+        "\n已导出文件：snapshot.json, metrics.json, event_node_update.json, event_link_update.json, "
+        "event_node_add.json, event_link_add.json, event_node_remove.json, event_link_remove.json"
+    )

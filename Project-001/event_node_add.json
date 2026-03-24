@@ -1,0 +1,33 @@
+{
+  "timestamp": 1774372907567,
+  "eventType": "NODE_ADD",
+  "payload": {
+    "node": {
+      "id": "U-LIVE-155",
+      "name": "Live-Terminal-155",
+      "type": "terminal",
+      "layer": "access",
+      "location": {
+        "geo": {
+          "lat": 34.305338,
+          "lng": 108.930938,
+          "altitude": 0
+        }
+      },
+      "state": {
+        "online": true,
+        "status": "online",
+        "lastSeen": 1774372907567
+      },
+      "metrics": {
+        "cpu": 0.325,
+        "load": 0.186,
+        "cache": 0.0,
+        "energy": 85.74,
+        "capacity": 50.0
+      },
+      "role": "user",
+      "alarmLevel": "normal"
+    }
+  }
+}

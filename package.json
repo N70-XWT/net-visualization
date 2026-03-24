@@ -24,6 +24,9 @@
   "scripts": {
     "start": "react-scripts start",
     "start:server": "npm --prefix server start",
+    "generate:python": "python Project-001/three_layer_network.py",
+    "generate:python:loop": "python Project-001/live_export_runner.py --interval 3",
+    "start:server:python": "npm run generate:python && npm --prefix server start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
