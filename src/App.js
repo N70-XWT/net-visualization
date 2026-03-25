@@ -45,7 +45,10 @@ const POLLING_INTERVAL_MS = Math.max(
 );
 const PLAYBACK_FRAME_FETCH_LIMIT = 50;
 const PLAYBACK_STEP_INTERVAL_MS = 1000;
+const KPI_HISTORY_MAX_POINTS = 30;
+const FOCUS_PULSE_DURATION_MS = 1800;
 const CONTROL_PANEL_COLLAPSED_STORAGE_KEY = 'netviz:control-panel-collapsed';
+const MAP_LEGEND_COLLAPSED_STORAGE_KEY = 'netviz:map-legend-collapsed';
 const CONTROL_PANEL_SECTIONS_STORAGE_KEY = 'netviz:control-panel-sections';
 const CONTROL_PANEL_SECTION_DEFAULTS = {
   search: true,
@@ -117,6 +120,17 @@ function formatTimestamp(isoString) {
     return '-';
   }
   return parsed.toLocaleTimeString();
+}
+
+function formatTimestampWithDate(isoString) {
+  if (!isoString) {
+    return '-';
+  }
+  const parsed = new Date(isoString);
+  if (Number.isNaN(parsed.getTime())) {
+    return '-';
+  }
+  return parsed.toLocaleString();
 }
 
 function toFiniteNumberOrNull(value) {
@@ -342,7 +356,7 @@ function CollapsibleSection({ title, isOpen, onToggle, children, className = '' 
             isOpen ? 'rotate-0' : '-rotate-90'
           }`}
         >
-          ▾
+          >
         </span>
       </button>
       <div
@@ -353,6 +367,62 @@ function CollapsibleSection({ title, isOpen, onToggle, children, className = '' 
         {children}
       </div>
     </div>
+  );
+}
+
+function getTrendDirection(points) {
+  const validPoints = points.filter((value) => Number.isFinite(value));
+  if (validPoints.length < 2) {
+    return 'flat';
+  }
+  const first = validPoints[0];
+  const last = validPoints[validPoints.length - 1];
+  const delta = last - first;
+  const base = Math.max(1, Math.abs(first));
+  if (Math.abs(delta) / base < 0.03) {
+    return 'flat';
+  }
+  return delta > 0 ? 'up' : 'down';
+}
+
+function KpiSparkline({ points, color = '#35f29a' }) {
+  const validPoints = points.filter((value) => Number.isFinite(value));
+  if (validPoints.length < 2) {
+    return (
+      <div className="mt-1 h-8 rounded border border-white/10 bg-white/[0.03] text-[10px] text-slate-500 flex items-center justify-center">
+        no trend
+      </div>
+    );
+  }
+
+  const min = Math.min(...validPoints);
+  const max = Math.max(...validPoints);
+  const range = Math.max(1e-9, max - min);
+
+  const linePoints = validPoints
+    .map((value, index) => {
+      const x = (index / (validPoints.length - 1)) * 100;
+      const y = 22 - ((value - min) / range) * 18;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(' ');
+
+  return (
+    <svg
+      className="mt-1 h-8 w-full rounded border border-white/10 bg-white/[0.03]"
+      viewBox="0 0 100 24"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <polyline
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={linePoints}
+      />
+    </svg>
   );
 }
 
@@ -381,9 +451,17 @@ function App() {
   const [playbackPlaying, setPlaybackPlaying] = useState(false);
   const [playbackLoading, setPlaybackLoading] = useState(false);
   const [playbackError, setPlaybackError] = useState('');
+  const [playbackFrameFlash, setPlaybackFrameFlash] = useState(false);
   const [controlPanelCollapsed, setControlPanelCollapsed] = useState(() => {
     try {
       return window.localStorage.getItem(CONTROL_PANEL_COLLAPSED_STORAGE_KEY) === '1';
+    } catch (_error) {
+      return false;
+    }
+  });
+  const [mapLegendCollapsed, setMapLegendCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem(MAP_LEGEND_COLLAPSED_STORAGE_KEY) === '1';
     } catch (_error) {
       return false;
     }
@@ -406,6 +484,13 @@ function App() {
       return CONTROL_PANEL_SECTION_DEFAULTS;
     }
   });
+  const [kpiHistory, setKpiHistory] = useState(() => ({
+    onlineNodes: [],
+    activeAlerts: [],
+    avgDelay: [],
+    avgLoss: [],
+    avgUtilization: [],
+  }));
   const refreshInFlightRef = useRef(false);
 
   const activePlaybackFrame = useMemo(() => {
@@ -417,6 +502,15 @@ function App() {
     }
     return playbackFrames[playbackFrameIndex] || null;
   }, [playbackFrameIndex, playbackFrames, playbackMode]);
+
+  const playbackFrameCount = playbackFrames.length;
+  const playbackFrameNumber = playbackFrameCount
+    ? Math.min(playbackFrameIndex, playbackFrameCount - 1) + 1
+    : 0;
+  const playbackProgressPercent = playbackFrameCount > 1
+    ? (Math.min(playbackFrameIndex, playbackFrameCount - 1) / (playbackFrameCount - 1)) * 100
+    : 0;
+  const isPlaybackVisualFlash = playbackMode === 'playback' && playbackFrameFlash;
 
   const effectiveTopologyData = useMemo(() => {
     if (playbackMode === 'playback') {
@@ -475,13 +569,18 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [hoveredNodeId, setHoveredNodeId] = useState(null);
+  const [focusedNodeId, setFocusedNodeId] = useState(null);
   const [selectedLinkId, setSelectedLinkId] = useState(null);
   const [hoveredLinkId, setHoveredLinkId] = useState(null);
+  const [focusedLinkId, setFocusedLinkId] = useState(null);
   const [focusRequestId, setFocusRequestId] = useState(null);
   const [mapViewMode, setMapViewMode] = useState('2d');
   const [searchInput, setSearchInput] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [enabledLayers, setEnabledLayers] = useState(() => LAYER_OPTIONS.map((item) => item.key));
+  const nodeFocusTimerRef = useRef(null);
+  const linkFocusTimerRef = useRef(null);
+  const playbackFlashTimerRef = useRef(null);
 
   const enabledLayerSet = useMemo(() => new Set(enabledLayers), [enabledLayers]);
 
@@ -566,6 +665,47 @@ function App() {
     };
   }, [baseNodes, effectiveAlerts, effectiveSituationCurrent, links]);
 
+  useEffect(() => {
+    if (playbackMode !== 'live' || !lastRefreshAt) {
+      return;
+    }
+
+    const appendPoint = (series, value) => {
+      if (!Number.isFinite(value)) {
+        return series;
+      }
+      const nextSeries = [...series, value];
+      if (nextSeries.length > KPI_HISTORY_MAX_POINTS) {
+        return nextSeries.slice(nextSeries.length - KPI_HISTORY_MAX_POINTS);
+      }
+      return nextSeries;
+    };
+
+    setKpiHistory((prev) => ({
+      onlineNodes: appendPoint(prev.onlineNodes, kpiData.onlineNodes),
+      activeAlerts: appendPoint(prev.activeAlerts, kpiData.activeAlerts),
+      avgDelay: appendPoint(prev.avgDelay, kpiData.avgDelay),
+      avgLoss: appendPoint(prev.avgLoss, kpiData.avgLoss),
+      avgUtilization: appendPoint(prev.avgUtilization, kpiData.avgUtilization),
+    }));
+  }, [
+    kpiData.activeAlerts,
+    kpiData.avgDelay,
+    kpiData.avgLoss,
+    kpiData.avgUtilization,
+    kpiData.onlineNodes,
+    lastRefreshAt,
+    playbackMode,
+  ]);
+
+  const kpiTrend = useMemo(() => ({
+    onlineNodes: getTrendDirection(kpiHistory.onlineNodes),
+    activeAlerts: getTrendDirection(kpiHistory.activeAlerts),
+    avgDelay: getTrendDirection(kpiHistory.avgDelay),
+    avgLoss: getTrendDirection(kpiHistory.avgLoss),
+    avgUtilization: getTrendDirection(kpiHistory.avgUtilization),
+  }), [kpiHistory]);
+
   const getDynamicNodeGeo = useCallback((nodeId) => {
     const dynGeo = nodeStateRef.current[nodeId]?.location?.geo;
     if (dynGeo) {
@@ -600,10 +740,11 @@ function App() {
     const liftPx = mapViewMode === '3d' ? getAltitudeLiftPx(altitude) : 0;
     markerElement.style.marginTop = `${-liftPx}px`;
 
+    const focusedBoost = focusedNodeId === nodeId ? 320 : 0;
     const selectedBoost = selectedNodeId === nodeId ? 220 : 0;
     const hoverBoost = hoveredNodeId === nodeId ? 120 : 0;
-    marker.setZIndexOffset(liftPx + selectedBoost + hoverBoost);
-  }, [getDynamicNodeAltitude, hoveredNodeId, mapViewMode, selectedNodeId]);
+    marker.setZIndexOffset(liftPx + focusedBoost + selectedBoost + hoverBoost);
+  }, [focusedNodeId, getDynamicNodeAltitude, hoveredNodeId, mapViewMode, selectedNodeId]);
 
   const applyMarkerInteractiveVisual = useCallback((marker, nodeId) => {
     if (!marker) {
@@ -613,12 +754,14 @@ function App() {
     if (!markerElement) {
       return;
     }
+    const isFocused = focusedNodeId === nodeId;
     const isSelected = selectedNodeId === nodeId;
-    const isHovered = hoveredNodeId === nodeId && !isSelected;
+    const isHovered = hoveredNodeId === nodeId && !isSelected && !isFocused;
+    markerElement.classList.toggle('node-marker--focused', isFocused);
     markerElement.classList.toggle('node-marker--hover', isHovered);
     markerElement.classList.toggle('node-marker--selected', isSelected);
     markerElement.style.cursor = 'pointer';
-  }, [hoveredNodeId, selectedNodeId]);
+  }, [focusedNodeId, hoveredNodeId, selectedNodeId]);
 
   useEffect(() => {
     nodeMapRef.current = buildNodeMap(baseNodes);
@@ -772,6 +915,17 @@ function App() {
   useEffect(() => {
     try {
       window.localStorage.setItem(
+        MAP_LEGEND_COLLAPSED_STORAGE_KEY,
+        mapLegendCollapsed ? '1' : '0'
+      );
+    } catch (_error) {
+      // Ignore localStorage errors in restricted environments.
+    }
+  }, [mapLegendCollapsed]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
         CONTROL_PANEL_SECTIONS_STORAGE_KEY,
         JSON.stringify(controlPanelSections)
       );
@@ -789,6 +943,35 @@ function App() {
     }, 320);
     return () => clearTimeout(timer);
   }, [controlPanelCollapsed]);
+
+  useEffect(() => {
+    return () => {
+      if (nodeFocusTimerRef.current) {
+        clearTimeout(nodeFocusTimerRef.current);
+      }
+      if (linkFocusTimerRef.current) {
+        clearTimeout(linkFocusTimerRef.current);
+      }
+      if (playbackFlashTimerRef.current) {
+        clearTimeout(playbackFlashTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (playbackMode !== 'playback' || !playbackFrames.length) {
+      setPlaybackFrameFlash(false);
+      return;
+    }
+    setPlaybackFrameFlash(true);
+    if (playbackFlashTimerRef.current) {
+      clearTimeout(playbackFlashTimerRef.current);
+    }
+    playbackFlashTimerRef.current = setTimeout(() => {
+      setPlaybackFrameFlash(false);
+      playbackFlashTimerRef.current = null;
+    }, 260);
+  }, [playbackFrameIndex, playbackFrames.length, playbackMode]);
 
   useEffect(() => {
     if (playbackMode === 'playback') {
@@ -854,6 +1037,12 @@ function App() {
   }, [hoveredNodeId, visibleNodeSet]);
 
   useEffect(() => {
+    if (focusedNodeId && !visibleNodeSet.has(focusedNodeId)) {
+      setFocusedNodeId(null);
+    }
+  }, [focusedNodeId, visibleNodeSet]);
+
+  useEffect(() => {
     if (selectedLinkId && !visibleLinks.some((item) => item.id === selectedLinkId)) {
       setSelectedLinkId(null);
     }
@@ -865,19 +1054,82 @@ function App() {
     }
   }, [hoveredLinkId, visibleLinks]);
 
+  useEffect(() => {
+    if (focusedLinkId && !visibleLinks.some((item) => item.id === focusedLinkId)) {
+      setFocusedLinkId(null);
+    }
+  }, [focusedLinkId, visibleLinks]);
+
+  const startNodeFocusPulse = useCallback((nodeId) => {
+    if (!nodeId) {
+      return;
+    }
+    setFocusedNodeId(nodeId);
+    if (nodeFocusTimerRef.current) {
+      clearTimeout(nodeFocusTimerRef.current);
+    }
+    nodeFocusTimerRef.current = setTimeout(() => {
+      setFocusedNodeId((prev) => (prev === nodeId ? null : prev));
+      nodeFocusTimerRef.current = null;
+    }, FOCUS_PULSE_DURATION_MS);
+  }, []);
+
+  const startLinkFocusPulse = useCallback((linkId) => {
+    if (!linkId) {
+      return;
+    }
+    setFocusedLinkId(linkId);
+    if (linkFocusTimerRef.current) {
+      clearTimeout(linkFocusTimerRef.current);
+    }
+    linkFocusTimerRef.current = setTimeout(() => {
+      setFocusedLinkId((prev) => (prev === linkId ? null : prev));
+      linkFocusTimerRef.current = null;
+    }, FOCUS_PULSE_DURATION_MS);
+  }, []);
+
+  const focusMapToLink = useCallback((linkId) => {
+    if (!linkId) {
+      return;
+    }
+    const map = mapRef.current;
+    if (!map?.flyToBounds) {
+      return;
+    }
+    const matchedLink = links.find((item) => item.id === linkId);
+    if (!matchedLink) {
+      return;
+    }
+    const fromPosition = getDynamicNodePosition(matchedLink.from);
+    const toPosition = getDynamicNodePosition(matchedLink.to);
+    if (!fromPosition || !toPosition) {
+      return;
+    }
+    const bounds = L.latLngBounds([fromPosition, toPosition]);
+    map.flyToBounds(bounds, {
+      padding: [70, 70],
+      maxZoom: 15,
+      duration: 0.8,
+    });
+  }, [getDynamicNodePosition, links]);
+
   const handleToggleSidebar = useCallback((value) => {
     const nextCollapsed = !!value;
     setSidebarCollapsed(nextCollapsed);
     if (nextCollapsed) {
       setSelectedNodeId(null);
       setFocusRequestId(null);
+      setFocusedNodeId(null);
     }
   }, []);
 
   const handleSelectNode = useCallback((nodeId) => {
+    setSelectedLinkId(null);
+    setFocusedLinkId(null);
     setSelectedNodeId(nodeId);
     setFocusRequestId(nodeId);
-  }, []);
+    startNodeFocusPulse(nodeId);
+  }, [startNodeFocusPulse]);
 
   const handleAlertFocus = useCallback((alertItem) => {
     if (!alertItem || typeof alertItem !== 'object') {
@@ -885,16 +1137,21 @@ function App() {
     }
     if (alertItem.entityType === 'node' && alertItem.entityId) {
       setSelectedLinkId(null);
+      setFocusedLinkId(null);
       setSelectedNodeId(alertItem.entityId);
       setFocusRequestId(alertItem.entityId);
+      startNodeFocusPulse(alertItem.entityId);
       return;
     }
     if (alertItem.entityType === 'link' && alertItem.entityId) {
       setSelectedNodeId(null);
+      setFocusedNodeId(null);
       setFocusRequestId(null);
       setSelectedLinkId(alertItem.entityId);
+      startLinkFocusPulse(alertItem.entityId);
+      focusMapToLink(alertItem.entityId);
     }
-  }, []);
+  }, [focusMapToLink, startLinkFocusPulse, startNodeFocusPulse]);
 
   const handleLayerToggle = useCallback((layerKey) => {
     setEnabledLayers((prev) => {
@@ -925,12 +1182,16 @@ function App() {
     if (!matchedNodes.length) {
       setSelectedNodeId(null);
       setFocusRequestId(null);
+      setFocusedNodeId(null);
       return;
     }
 
+    setSelectedLinkId(null);
+    setFocusedLinkId(null);
     setSelectedNodeId(matchedNodes[0].id);
     setFocusRequestId(matchedNodes[0].id);
-  }, [baseNodes, enabledLayerSet, searchInput]);
+    startNodeFocusPulse(matchedNodes[0].id);
+  }, [baseNodes, enabledLayerSet, searchInput, startNodeFocusPulse]);
 
   const handleFocusConsumed = useCallback(() => {
     setFocusRequestId(null);
@@ -942,6 +1203,10 @@ function App() {
 
   const handleToggleControlPanel = useCallback(() => {
     setControlPanelCollapsed((prev) => !prev);
+  }, []);
+
+  const handleToggleLegend = useCallback(() => {
+    setMapLegendCollapsed((prev) => !prev);
   }, []);
 
   const handleToggleControlSection = useCallback((sectionKey) => {
@@ -1218,8 +1483,9 @@ function App() {
       return null;
     }
 
+    const isFocused = focusedNodeId === node.id;
     const isSelected = selectedNodeId === node.id;
-    const isHovered = hoveredNodeId === node.id && !isSelected;
+    const isHovered = hoveredNodeId === node.id && !isSelected && !isFocused;
     const dynamicNode = nodeStateRef.current[node.id];
     const statusSource = dynamicNode && dynamicNode.state
       ? { ...node, state: dynamicNode.state }
@@ -1230,19 +1496,19 @@ function App() {
       <CircleMarker
         key={`halo-${node.id}`}
         center={position}
-        radius={isSelected ? 21 : (isHovered ? 17 : 12)}
+        radius={isFocused ? (isSelected ? 24 : 22) : (isSelected ? 21 : (isHovered ? 17 : 12))}
         pathOptions={{
           color: nodeStatusColor,
-          weight: isSelected ? 2.8 : (isHovered ? 2.2 : 1.2),
-          opacity: isSelected ? 0.95 : (isHovered ? 0.76 : 0.45),
+          weight: isFocused ? 3.4 : (isSelected ? 2.8 : (isHovered ? 2.2 : 1.2)),
+          opacity: isFocused ? 1 : (isSelected ? 0.95 : (isHovered ? 0.76 : 0.45)),
           fillColor: nodeStatusColor,
-          fillOpacity: isSelected ? 0.22 : (isHovered ? 0.12 : 0.08),
-          className: `node-halo${isHovered ? ' node-halo--hover' : ''}${isSelected ? ' node-halo--selected' : ''}`,
+          fillOpacity: isFocused ? 0.26 : (isSelected ? 0.22 : (isHovered ? 0.12 : 0.08)),
+          className: `node-halo${isHovered ? ' node-halo--hover' : ''}${isSelected ? ' node-halo--selected' : ''}${isFocused ? ' node-halo--focused' : ''}`,
           interactive: false,
         }}
       />
     );
-  }), [hoveredNodeId, selectedNodeId, visibleNodes]);
+  }), [focusedNodeId, hoveredNodeId, selectedNodeId, visibleNodes]);
 
   const markerElements = useMemo(() => visibleNodes.map((node) => {
     const popupNode = playbackMode === 'playback' ? node : (nodeDetailsById[node.id] || node);
@@ -1338,10 +1604,11 @@ function App() {
     };
 
     const baseLinkStyle = getLinkStyle(link);
+    const isFocusedLink = focusedLinkId === link.id;
     const isSelectedLink = selectedLinkId === link.id;
-    const isHoveredLink = hoveredLinkId === link.id && !isSelectedLink;
-    const highlightWeight = isSelectedLink ? 5.2 : (isHoveredLink ? 4.1 : 3);
-    const linkStateClass = `${isHoveredLink ? ' link-line--hover' : ''}${isSelectedLink ? ' link-line--selected' : ''}`;
+    const isHoveredLink = hoveredLinkId === link.id && !isSelectedLink && !isFocusedLink;
+    const highlightWeight = isSelectedLink ? 5.2 : (isFocusedLink ? 4.8 : (isHoveredLink ? 4.1 : 3));
+    const linkStateClass = `${isHoveredLink ? ' link-line--hover' : ''}${isSelectedLink ? ' link-line--selected' : ''}${isFocusedLink ? ' link-line--focused' : ''}`;
 
     const linkPopupContent = (
       <Popup>
@@ -1362,14 +1629,14 @@ function App() {
 
     return (
       <React.Fragment key={link.id}>
-        {isHoveredLink ? (
+        {(isHoveredLink || isFocusedLink) ? (
           <Polyline
             positions={linkPositions}
             pathOptions={{
-              color: '#c7ced8',
-              weight: 7.6,
-              opacity: 0.6,
-              className: 'link-line link-line--hover-outline',
+              color: isFocusedLink ? '#f8fafc' : '#c7ced8',
+              weight: isFocusedLink ? 8.8 : 7.6,
+              opacity: isFocusedLink ? 0.78 : 0.6,
+              className: `link-line ${isFocusedLink ? 'link-line--focus-outline' : 'link-line--hover-outline'}`,
               interactive: false,
             }}
           />
@@ -1383,7 +1650,7 @@ function App() {
             opacity: healthOpacity,
             dashArray: linkDashArray || baseLinkStyle.dashArray,
             className: `link-line link-line--health${linkStateClass}`,
-            weight: isSelectedLink ? 4.4 : (isHoveredLink ? 3.4 : baseLinkStyle.weight),
+            weight: isSelectedLink ? 4.6 : (isFocusedLink ? 4.2 : (isHoveredLink ? 3.4 : baseLinkStyle.weight)),
             interactive: false,
           }}
         />
@@ -1391,7 +1658,11 @@ function App() {
           ref={flowLineRefCallback}
           eventHandlers={{
             click: (event) => {
+              setSelectedNodeId(null);
+              setFocusedNodeId(null);
+              setFocusRequestId(null);
               setSelectedLinkId(link.id);
+              startLinkFocusPulse(link.id);
               event.target?.openPopup?.();
             },
           }}
@@ -1399,7 +1670,7 @@ function App() {
           pathOptions={{
             color: healthColor,
             weight: highlightWeight,
-            opacity: isSelectedLink ? 1 : (isHoveredLink ? 0.95 : (flowOpacity ?? 0.88)),
+            opacity: isSelectedLink ? 1 : (isFocusedLink ? 1 : (isHoveredLink ? 0.95 : (flowOpacity ?? 0.88))),
             dashArray: isLinkDown ? '2 16' : undefined,
             className: `${flowClass}${linkStateClass}`,
             interactive: false,
@@ -1414,8 +1685,10 @@ function App() {
             },
             click: (event) => {
               setSelectedNodeId(null);
+              setFocusedNodeId(null);
               setFocusRequestId(null);
               setSelectedLinkId(link.id);
+              startLinkFocusPulse(link.id);
               event.target?.openPopup?.();
             },
           }}
@@ -1423,7 +1696,7 @@ function App() {
             color: '#ffffff',
             weight: isSelectedLink ? 18 : (isHoveredLink ? 16 : 14),
             opacity: 0,
-            className: `link-hit-area${isHoveredLink ? ' link-hit-area--hover' : ''}${isSelectedLink ? ' link-hit-area--selected' : ''}`,
+            className: `link-hit-area${isHoveredLink ? ' link-hit-area--hover' : ''}${isSelectedLink ? ' link-hit-area--selected' : ''}${isFocusedLink ? ' link-hit-area--focused' : ''}`,
             interactive: true,
           }}
         >
@@ -1444,6 +1717,7 @@ function App() {
           onToggle={handleToggleSidebar}
           typeMeta={NODE_TYPE_META}
           selectedNodeId={selectedNodeId}
+          focusedNodeId={focusedNodeId}
           onSelectNode={handleSelectNode}
         />
       </div>
@@ -1548,13 +1822,39 @@ function App() {
                 ? 'Loading...'
                 : (playbackMode === 'playback' ? 'Back To Live' : 'Enter Playback')}
             </button>
-            <div className="text-[10px] text-slate-300">
-              {playbackMode === 'playback' ? 'Playback Mode' : 'Live Mode'}
+            <div
+              className={`rounded-full border px-2 py-1 text-[10px] font-semibold tracking-[0.08em] ${
+                playbackMode === 'playback'
+                  ? 'border-amber-300/55 bg-amber-400/15 text-amber-100'
+                  : 'border-cyan-300/45 bg-cyan-400/10 text-cyan-100'
+              }`}
+            >
+              {playbackMode === 'playback' ? 'PLAYBACK MODE' : 'LIVE MODE'}
             </div>
           </div>
           {playbackMode === 'playback' ? (
-            <div className="mt-2">
-              <div className="flex gap-2">
+            <div className={`mt-2 rounded-lg border border-white/10 bg-white/[0.03] p-2 ${isPlaybackVisualFlash ? 'playback-data-flash' : ''}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-[11px] text-slate-200">
+                  <span className="font-semibold tracking-[0.08em] text-amber-100">
+                    Playback {playbackFrameNumber}/{playbackFrameCount}
+                  </span>
+                  <span className="mx-1 text-slate-400">|</span>
+                  <span className="text-slate-300">{formatTimestampWithDate(activePlaybackFrame?.timestamp)}</span>
+                </div>
+                <div className={`playback-state-pill ${playbackPlaying ? 'playback-state-pill--playing' : 'playback-state-pill--paused'}`}>
+                  <span className={`playback-state-dot ${playbackPlaying ? 'playback-state-dot--playing' : ''}`} />
+                  {playbackPlaying ? 'Playing' : 'Paused'}
+                </div>
+              </div>
+              <div className="mt-2 text-[10px] uppercase tracking-[0.12em] text-slate-300">Timeline</div>
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-800/80">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-emerald-300 to-amber-300 transition-all duration-300 ease-out"
+                  style={{ width: `${playbackProgressPercent}%` }}
+                />
+              </div>
+              <div className="mt-2 flex gap-2">
                 <button
                   type="button"
                   onClick={handlePlaybackPrevFrame}
@@ -1586,22 +1886,32 @@ function App() {
                 max={Math.max(0, playbackFrames.length - 1)}
                 value={Math.min(playbackFrameIndex, Math.max(0, playbackFrames.length - 1))}
                 onChange={handlePlaybackSliderChange}
-                className="mt-2 w-full"
+                className="playback-timeline-slider mt-2 w-full"
                 disabled={!playbackFrames.length}
               />
-              <div className="mt-1 text-slate-300">
-                Frame {playbackFrames.length ? (playbackFrameIndex + 1) : 0}/{playbackFrames.length}
-                {' | '}
-                Time: {formatTimestamp(activePlaybackFrame?.timestamp)}
+              <div className="mt-1 flex items-center justify-between text-[11px] text-slate-300">
+                <span>Frame {playbackFrameNumber}/{playbackFrameCount}</span>
+                <span>Time: {formatTimestamp(activePlaybackFrame?.timestamp)}</span>
               </div>
               {playbackError ? (
                 <div className="mt-1 text-amber-200">{playbackError}</div>
               ) : null}
             </div>
           ) : (
-            <div className="mt-1 text-slate-300">
-              Live mode (polling enabled). Switch to Playback for history replay.
-              {playbackError ? ` ${playbackError}` : ''}
+            <div className="mt-2 rounded-lg border border-cyan-300/20 bg-cyan-400/5 p-2 text-slate-200">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold tracking-[0.08em] text-cyan-100">Live Timeline</span>
+                <span className="rounded-full border border-cyan-300/35 bg-cyan-400/10 px-2 py-0.5 text-[10px] text-cyan-100">
+                  Polling {Math.round(POLLING_INTERVAL_MS / 1000)}s
+                </span>
+              </div>
+              <div className="mt-1 text-[11px] text-slate-300">
+                Last refresh: {formatTimestamp(lastRefreshAt)}
+              </div>
+              <div className="mt-1 text-[11px] text-slate-300">
+                Switch to Playback to replay recent historical frames.
+                {playbackError ? ` ${playbackError}` : ''}
+              </div>
             </div>
           )}
         </CollapsibleSection>
@@ -1681,28 +1991,54 @@ function App() {
           onToggle={() => handleToggleControlSection('kpi')}
           className="mt-3"
         >
-          <div className="grid grid-cols-2 gap-2 text-[11px]">
+          <div className={`grid grid-cols-2 gap-2 text-[11px] ${isPlaybackVisualFlash ? 'playback-data-flash' : ''}`}>
             <div className="rounded-lg border border-white/15 bg-white/5 p-2">
-              <div className="text-slate-300">Online Nodes</div>
+              <div className="flex items-center justify-between text-slate-300">
+                <span>Online Nodes</span>
+                <span className="text-[10px] text-emerald-200">{kpiTrend.onlineNodes}</span>
+              </div>
               <div className="mt-1 text-sm font-semibold text-emerald-200">
                 {kpiData.onlineNodes}/{kpiData.totalNodes}
               </div>
+              <KpiSparkline points={kpiHistory.onlineNodes} color="#35f29a" />
             </div>
             <div className="rounded-lg border border-white/15 bg-white/5 p-2">
-              <div className="text-slate-300">Active Alerts</div>
+              <div className="flex items-center justify-between text-slate-300">
+                <span>Active Alerts</span>
+                <span className="text-[10px] text-rose-200">{kpiTrend.activeAlerts}</span>
+              </div>
               <div className="mt-1 text-sm font-semibold text-rose-200">{kpiData.activeAlerts}</div>
+              <KpiSparkline points={kpiHistory.activeAlerts} color="#f95d5d" />
             </div>
             <div className="rounded-lg border border-white/15 bg-white/5 p-2">
-              <div className="text-slate-300">Avg Delay</div>
+              <div className="flex items-center justify-between text-slate-300">
+                <span>Avg Delay</span>
+                <span className="text-[10px] text-amber-200">{kpiTrend.avgDelay}</span>
+              </div>
               <div className="mt-1 text-sm font-semibold text-cyan-100">
                 {formatMetricNumber(kpiData.avgDelay, 1)} ms
               </div>
+              <KpiSparkline points={kpiHistory.avgDelay} color="#f4c84a" />
             </div>
             <div className="rounded-lg border border-white/15 bg-white/5 p-2">
-              <div className="text-slate-300">Avg Loss / Util</div>
-              <div className="mt-1 text-sm font-semibold text-cyan-100">
-                {formatMetricPercent(kpiData.avgLoss, 2)} / {formatMetricPercent(kpiData.avgUtilization, 1)}
+              <div className="flex items-center justify-between text-slate-300">
+                <span>Avg Loss</span>
+                <span className="text-[10px] text-amber-200">{kpiTrend.avgLoss}</span>
               </div>
+              <div className="mt-1 text-sm font-semibold text-cyan-100">
+                {formatMetricPercent(kpiData.avgLoss, 2)}
+              </div>
+              <KpiSparkline points={kpiHistory.avgLoss} color="#f4c84a" />
+            </div>
+            <div className="rounded-lg border border-white/15 bg-white/5 p-2 col-span-2">
+              <div className="flex items-center justify-between text-slate-300">
+                <span>Avg Utilization</span>
+                <span className="text-[10px] text-cyan-200">{kpiTrend.avgUtilization}</span>
+              </div>
+              <div className="mt-1 text-sm font-semibold text-cyan-100">
+                {formatMetricPercent(kpiData.avgUtilization, 1)}
+              </div>
+              <KpiSparkline points={kpiHistory.avgUtilization} color="#67e8f9" />
             </div>
           </div>
         </CollapsibleSection>
@@ -1748,7 +2084,7 @@ function App() {
           className="mt-2"
         >
           {effectiveAlerts.length ? (
-            <ul className="space-y-1 text-slate-300">
+            <ul className={`space-y-1 text-slate-300 ${isPlaybackVisualFlash ? 'playback-data-flash rounded-md' : ''}`}>
               {effectiveAlerts.slice(0, 5).map((alertItem) => (
                 <li key={alertItem.id}>
                   <button
@@ -1766,10 +2102,10 @@ function App() {
               ))}
             </ul>
           ) : (
-            <div className="text-slate-400">No active alerts</div>
+            <div className={`text-slate-400 ${isPlaybackVisualFlash ? 'playback-data-flash rounded-md px-1 py-0.5' : ''}`}>No active alerts</div>
           )}
         </CollapsibleSection>
-        <div className="mt-2 rounded-lg border border-white/15 bg-white/5 p-2 text-[11px]">
+        <div className={`mt-2 rounded-lg border border-white/15 bg-white/5 p-2 text-[11px] ${isPlaybackVisualFlash ? 'playback-data-flash' : ''}`}>
           <div className="font-semibold text-slate-100">Recent Events</div>
           {effectiveEvents.length ? (
             <ul className="mt-1 space-y-1 text-slate-300">
@@ -1787,6 +2123,39 @@ function App() {
         )}
       </div>
 
+      <div
+        className={`playback-mode-bar absolute left-1/2 top-5 z-[1000] -translate-x-1/2 rounded-2xl border px-3 py-2 text-xs backdrop-blur-xl shadow-2xl ${
+          playbackMode === 'playback'
+            ? 'playback-mode-bar--playback border-amber-300/45 bg-[#2b1b0bcc] text-amber-50'
+            : 'playback-mode-bar--live border-cyan-300/35 bg-[#07182fcc] text-cyan-50'
+        }`}
+      >
+        <div className="flex items-center justify-center gap-2">
+          <span
+            className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-[0.08em] ${
+              playbackMode === 'playback'
+                ? 'border-amber-200/45 bg-amber-300/15 text-amber-100'
+                : 'border-cyan-200/45 bg-cyan-300/10 text-cyan-100'
+            }`}
+          >
+            {playbackMode === 'playback' ? 'PLAYBACK MODE' : 'LIVE MODE'}
+          </span>
+          {playbackMode === 'playback' ? (
+            <span className={`playback-state-pill ${playbackPlaying ? 'playback-state-pill--playing' : 'playback-state-pill--paused'}`}>
+              <span className={`playback-state-dot ${playbackPlaying ? 'playback-state-dot--playing' : ''}`} />
+              {playbackPlaying ? 'Playing' : 'Paused'}
+            </span>
+          ) : (
+            <span className="text-[10px] text-cyan-100/90">Polling {Math.round(POLLING_INTERVAL_MS / 1000)}s</span>
+          )}
+        </div>
+        <div className="mt-1 text-center text-[11px]">
+          {playbackMode === 'playback'
+            ? `Frame ${playbackFrameNumber}/${playbackFrameCount} · ${formatTimestampWithDate(activePlaybackFrame?.timestamp)}`
+            : `Last refresh · ${formatTimestamp(lastRefreshAt)}`}
+        </div>
+      </div>
+
       <div className="map-mode-panel absolute right-5 top-5 z-[1000] rounded-2xl border border-white/20 bg-[#07182fcc] p-3 text-xs text-slate-100 backdrop-blur-xl shadow-2xl">
         <p className="tracking-[0.2em] uppercase text-[10px] text-cyan-200/90">Map View</p>
         <button
@@ -1801,6 +2170,66 @@ function App() {
         <p className="mt-2 text-[11px] text-slate-300/90">
           {mapViewMode === '3d' ? '3D mode for altitude-aware display.' : '2D mode for static topology display.'}
         </p>
+      </div>
+
+      <div
+        className={`absolute right-5 bottom-5 z-[1000] rounded-2xl border border-white/20 bg-[#07182fcc] text-xs text-slate-100 backdrop-blur-xl shadow-2xl transition-all duration-300 ease-out ${
+          mapLegendCollapsed ? 'w-[92px] p-2' : 'w-[260px] p-3'
+        }`}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <p className="tracking-[0.14em] uppercase text-[10px] text-cyan-200/90">Legend</p>
+          <button
+            type="button"
+            onClick={handleToggleLegend}
+            className="h-6 w-6 rounded-md border border-white/20 bg-white/10 text-[11px] text-slate-100 transition-colors hover:bg-white/20"
+            aria-label={mapLegendCollapsed ? 'Expand legend' : 'Collapse legend'}
+            title={mapLegendCollapsed ? 'Expand legend' : 'Collapse legend'}
+          >
+            {mapLegendCollapsed ? '+' : '-'}
+          </button>
+        </div>
+        {mapLegendCollapsed ? (
+          <div className="mt-2 text-[10px] text-slate-300">Visual guide</div>
+        ) : (
+          <div className="mt-2 space-y-2 text-[11px]">
+            <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
+              <div className="text-[10px] uppercase tracking-[0.08em] text-slate-300">Node Status</div>
+              <div className="mt-1 space-y-1">
+                <div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#35f29a' }} />Normal / Online</div>
+                <div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#f4c84a' }} />Warning</div>
+                <div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#f95d5d' }} />Critical / Offline</div>
+              </div>
+            </div>
+
+            <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
+              <div className="text-[10px] uppercase tracking-[0.08em] text-slate-300">Link State</div>
+              <div className="mt-1 space-y-1">
+                <div className="flex items-center gap-2"><span className="w-8 border-t-2 border-[#35f29a]" />Normal link</div>
+                <div className="flex items-center gap-2"><span className="w-8 border-t-2 border-[#f4c84a]" />Warning link</div>
+                <div className="flex items-center gap-2"><span className="w-8 border-t-2 border-[#f95d5d]" />Critical link</div>
+                <div className="flex items-center gap-2"><span className="w-8 border-t-2 border-dashed border-[#f95d5d]" />Down / unavailable (dashed)</div>
+              </div>
+            </div>
+
+            <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
+              <div className="text-[10px] uppercase tracking-[0.08em] text-slate-300">KPI Trend</div>
+              <div className="mt-1 flex flex-wrap gap-2">
+                <span className="rounded border border-emerald-300/40 bg-emerald-400/10 px-1.5 py-0.5 text-[10px] text-emerald-100">up</span>
+                <span className="rounded border border-rose-300/40 bg-rose-400/10 px-1.5 py-0.5 text-[10px] text-rose-100">down</span>
+                <span className="rounded border border-slate-300/30 bg-slate-400/10 px-1.5 py-0.5 text-[10px] text-slate-200">flat</span>
+              </div>
+            </div>
+
+            <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
+              <div className="text-[10px] uppercase tracking-[0.08em] text-slate-300">Mode</div>
+              <div className="mt-1 flex flex-wrap gap-2">
+                <span className="rounded border border-cyan-300/40 bg-cyan-400/10 px-1.5 py-0.5 text-[10px] text-cyan-100">Live Mode</span>
+                <span className="rounded border border-amber-300/40 bg-amber-400/10 px-1.5 py-0.5 text-[10px] text-amber-100">Playback Mode</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {mapViewMode === '2d' ? (
@@ -1838,3 +2267,4 @@ function App() {
 }
 
 export default App;
+

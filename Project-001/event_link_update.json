@@ -1,19 +1,19 @@
 {
-  "timestamp": 1774373094766,
+  "timestamp": 1774416290557,
   "eventType": "LINK_UPDATE",
   "payload": {
-    "linkId": "L-A3-U5",
-    "from": "A3",
-    "to": "U5",
+    "linkId": "L-A5-B3",
+    "from": "A5",
+    "to": "B3",
     "changes": {
-      "bandwidthMbps": 20,
-      "utilization": 0.483,
-      "delayMs": 57.33,
-      "lossRate": 0.099,
-      "snrDb": 16.26,
+      "bandwidthMbps": 100,
+      "utilization": 0.684,
+      "delayMs": 56.68,
+      "lossRate": 0.0924,
+      "snrDb": 26.53,
       "health": "danger",
-      "state": "up",
-      "lastUpdate": 1774373094766
+      "state": "unstable",
+      "lastUpdate": 1774416290557
     }
   }
 }

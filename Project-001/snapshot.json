@@ -1,5 +1,5 @@
 {
-  "timestamp": 1774373094766,
+  "timestamp": 1774416290558,
   "nodes": [
     {
       "id": "B1",
@@ -16,17 +16,17 @@
       "state": {
         "online": true,
         "status": "online",
-        "lastSeen": 1774373025301
+        "lastSeen": 1774416230257
       },
       "metrics": {
-        "cpu": 0.347,
-        "load": 0.488,
+        "cpu": 0.064,
+        "load": 0.851,
         "cache": 0.0,
-        "energy": 78.35,
+        "energy": 48.67,
         "capacity": 500
       },
       "role": "core",
-      "alarmLevel": "normal"
+      "alarmLevel": "warning"
     },
     {
       "id": "B2",
@@ -41,19 +41,19 @@
         }
       },
       "state": {
-        "online": true,
-        "status": "online",
-        "lastSeen": 1774372889460
+        "online": false,
+        "status": "offline",
+        "lastSeen": 1774416136818
       },
       "metrics": {
-        "cpu": 0.131,
-        "load": 0.486,
+        "cpu": 0.639,
+        "load": 0.523,
         "cache": 0.0,
-        "energy": 49.54,
+        "energy": 89.61,
         "capacity": 500
       },
       "role": "core",
-      "alarmLevel": "normal"
+      "alarmLevel": "danger"
     },
     {
       "id": "B3",
@@ -69,14 +69,14 @@
       },
       "state": {
         "online": true,
-        "status": "online",
-        "lastSeen": 1774373016245
+        "status": "busy",
+        "lastSeen": 1774416272465
       },
       "metrics": {
-        "cpu": 0.661,
-        "load": 0.664,
+        "cpu": 0.484,
+        "load": 0.609,
         "cache": 0.0,
-        "energy": 54.28,
+        "energy": 48.67,
         "capacity": 500
       },
       "role": "core",
@@ -97,13 +97,13 @@
       "state": {
         "online": true,
         "status": "online",
-        "lastSeen": 1774373040425
+        "lastSeen": 1774416115714
       },
       "metrics": {
-        "cpu": 0.726,
-        "load": 0.066,
+        "cpu": 0.059,
+        "load": 0.235,
         "cache": 0.0,
-        "energy": 58.78,
+        "energy": 35.93,
         "capacity": 200
       },
       "role": "relay",
@@ -123,18 +123,18 @@
       },
       "state": {
         "online": true,
-        "status": "online",
-        "lastSeen": 1774373070627
+        "status": "busy",
+        "lastSeen": 1774416200116
       },
       "metrics": {
-        "cpu": 0.744,
-        "load": 0.061,
+        "cpu": 0.938,
+        "load": 0.341,
         "cache": 0.0,
-        "energy": 65.77,
+        "energy": 33.01,
         "capacity": 200
       },
       "role": "relay",
-      "alarmLevel": "normal"
+      "alarmLevel": "warning"
     },
     {
       "id": "A3",
@@ -151,17 +151,17 @@
       "state": {
         "online": true,
         "status": "busy",
-        "lastSeen": 1774373073646
+        "lastSeen": 1774416233272
       },
       "metrics": {
-        "cpu": 0.858,
-        "load": 0.136,
+        "cpu": 0.763,
+        "load": 0.661,
         "cache": 0.0,
-        "energy": 90.17,
+        "energy": 47.31,
         "capacity": 200
       },
       "role": "relay",
-      "alarmLevel": "warning"
+      "alarmLevel": "normal"
     },
     {
       "id": "A4",
@@ -178,17 +178,17 @@
       "state": {
         "online": true,
         "status": "online",
-        "lastSeen": 1774373085723
+        "lastSeen": 1774416281512
       },
       "metrics": {
-        "cpu": 0.519,
-        "load": 0.503,
+        "cpu": 0.272,
+        "load": 0.942,
         "cache": 0.0,
-        "energy": 78.07,
+        "energy": 36.95,
         "capacity": 200
       },
       "role": "relay",
-      "alarmLevel": "normal"
+      "alarmLevel": "warning"
     },
     {
       "id": "A5",
@@ -205,17 +205,17 @@
       "state": {
         "online": true,
         "status": "online",
-        "lastSeen": 1774373088747
+        "lastSeen": 1774416290557
       },
       "metrics": {
-        "cpu": 0.179,
-        "load": 0.942,
+        "cpu": 0.306,
+        "load": 0.226,
         "cache": 0.0,
-        "energy": 52.55,
+        "energy": 59.96,
         "capacity": 200
       },
       "role": "relay",
-      "alarmLevel": "warning"
+      "alarmLevel": "normal"
     },
     {
       "id": "U1",
@@ -231,18 +231,18 @@
       },
       "state": {
         "online": true,
-        "status": "busy",
-        "lastSeen": 1774372995126
+        "status": "online",
+        "lastSeen": 1774416194089
       },
       "metrics": {
-        "cpu": 0.942,
-        "load": 0.219,
+        "cpu": 0.264,
+        "load": 0.578,
         "cache": 0.0,
-        "energy": 67.03,
+        "energy": 68.78,
         "capacity": 50
       },
       "role": "user",
-      "alarmLevel": "warning"
+      "alarmLevel": "normal"
     },
     {
       "id": "U2",
@@ -259,13 +259,13 @@
       "state": {
         "online": true,
         "status": "online",
-        "lastSeen": 1774373064591
+        "lastSeen": 1774416287544
       },
       "metrics": {
-        "cpu": 0.173,
-        "load": 0.424,
+        "cpu": 0.41,
+        "load": 0.052,
         "cache": 0.0,
-        "energy": 57.28,
+        "energy": 20.39,
         "capacity": 50
       },
       "role": "user",
@@ -286,17 +286,17 @@
       "state": {
         "online": true,
         "status": "online",
-        "lastSeen": 1774373010204
+        "lastSeen": 1774416275481
       },
       "metrics": {
-        "cpu": 0.563,
-        "load": 0.777,
+        "cpu": 0.806,
+        "load": 0.885,
         "cache": 0.0,
-        "energy": 36.84,
+        "energy": 20.34,
         "capacity": 50
       },
       "role": "user",
-      "alarmLevel": "normal"
+      "alarmLevel": "warning"
     },
     {
       "id": "U4",
@@ -311,19 +311,19 @@
         }
       },
       "state": {
-        "online": true,
-        "status": "online",
-        "lastSeen": 1774372992039
+        "online": false,
+        "status": "offline",
+        "lastSeen": 1774416248349
       },
       "metrics": {
-        "cpu": 0.677,
-        "load": 0.583,
+        "cpu": 0.356,
+        "load": 0.538,
         "cache": 0.0,
-        "energy": 67.89,
+        "energy": 83.84,
         "capacity": 50
       },
       "role": "user",
-      "alarmLevel": "normal"
+      "alarmLevel": "danger"
     },
     {
       "id": "U5",
@@ -339,14 +339,14 @@
       },
       "state": {
         "online": true,
-        "status": "online",
-        "lastSeen": 1774373022273
+        "status": "busy",
+        "lastSeen": 1774416263419
       },
       "metrics": {
-        "cpu": 0.46,
-        "load": 0.323,
+        "cpu": 0.554,
+        "load": 0.609,
         "cache": 0.0,
-        "energy": 39.67,
+        "energy": 59.43,
         "capacity": 50
       },
       "role": "user",
@@ -366,14 +366,14 @@
       },
       "state": {
         "online": true,
-        "status": "online",
-        "lastSeen": 1774373091760
+        "status": "busy",
+        "lastSeen": 1774416257389
       },
       "metrics": {
-        "cpu": 0.103,
-        "load": 0.308,
+        "cpu": 0.738,
+        "load": 0.164,
         "cache": 0.0,
-        "energy": 45.68,
+        "energy": 57.32,
         "capacity": 50
       },
       "role": "user",
@@ -392,19 +392,19 @@
         }
       },
       "state": {
-        "online": true,
-        "status": "busy",
-        "lastSeen": 1774373094766
+        "online": false,
+        "status": "offline",
+        "lastSeen": 1774416284527
       },
       "metrics": {
-        "cpu": 0.639,
-        "load": 0.694,
+        "cpu": 0.766,
+        "load": 0.482,
         "cache": 0.0,
-        "energy": 84.7,
+        "energy": 76.42,
         "capacity": 50
       },
       "role": "user",
-      "alarmLevel": "normal"
+      "alarmLevel": "danger"
     },
     {
       "id": "U8",
@@ -420,18 +420,18 @@
       },
       "state": {
         "online": true,
-        "status": "busy",
-        "lastSeen": 1774373082713
+        "status": "online",
+        "lastSeen": 1774416254370
       },
       "metrics": {
-        "cpu": 0.49,
-        "load": 0.278,
+        "cpu": 0.232,
+        "load": 0.919,
         "cache": 0.0,
-        "energy": 55.1,
+        "energy": 65.78,
         "capacity": 50
       },
       "role": "user",
-      "alarmLevel": "normal"
+      "alarmLevel": "warning"
     },
     {
       "id": "U9",
@@ -448,17 +448,17 @@
       "state": {
         "online": true,
         "status": "online",
-        "lastSeen": 1774373055537
+        "lastSeen": 1774416227244
       },
       "metrics": {
-        "cpu": 0.682,
-        "load": 0.848,
+        "cpu": 0.943,
+        "load": 0.605,
         "cache": 0.0,
-        "energy": 89.08,
+        "energy": 23.36,
         "capacity": 50
       },
       "role": "user",
-      "alarmLevel": "normal"
+      "alarmLevel": "warning"
     },
     {
       "id": "U10",
@@ -474,41 +474,41 @@
       },
       "state": {
         "online": true,
-        "status": "busy",
-        "lastSeen": 1774373079692
+        "status": "online",
+        "lastSeen": 1774416278497
       },
       "metrics": {
-        "cpu": 0.45,
-        "load": 0.575,
+        "cpu": 0.947,
+        "load": 0.918,
         "cache": 0.0,
-        "energy": 66.98,
+        "energy": 50.16,
         "capacity": 50
       },
       "role": "user",
-      "alarmLevel": "normal"
+      "alarmLevel": "warning"
     },
     {
-      "id": "U-LIVE-165",
-      "name": "Live-Terminal-165",
+      "id": "U-LIVE-290",
+      "name": "Live-Terminal-290",
       "type": "terminal",
       "layer": "access",
       "location": {
         "geo": {
-          "lat": 34.268037,
-          "lng": 109.046677,
+          "lat": 34.237178,
+          "lng": 109.073084,
           "altitude": 0
         }
       },
       "state": {
         "online": true,
         "status": "online",
-        "lastSeen": 1774373088747
+        "lastSeen": 1774416284527
       },
       "metrics": {
-        "cpu": 0.256,
-        "load": 0.341,
+        "cpu": 0.118,
+        "load": 0.092,
         "cache": 0.0,
-        "energy": 93.66,
+        "energy": 61.11,
         "capacity": 50.0
       },
       "role": "user",
@@ -522,13 +522,13 @@
       "to": "B2",
       "type": "wired",
       "bandwidthMbps": 1000,
-      "utilization": 0.316,
-      "delayMs": 51.89,
-      "lossRate": 0.0488,
-      "snrDb": 23.37,
+      "utilization": 0.318,
+      "delayMs": 76.33,
+      "lossRate": 0.0687,
+      "snrDb": 12.07,
       "health": "danger",
-      "state": "down",
-      "lastUpdate": 1774372844217
+      "state": "up",
+      "lastUpdate": 1774416227244
     },
     {
       "id": "L-B2-B3",
@@ -536,13 +536,13 @@
       "to": "B3",
       "type": "wired",
       "bandwidthMbps": 1000,
-      "utilization": 0.729,
-      "delayMs": 41.16,
-      "lossRate": 0.0775,
-      "snrDb": 24.17,
+      "utilization": 0.683,
+      "delayMs": 14.04,
+      "lossRate": 0.0111,
+      "snrDb": 12.13,
       "health": "warning",
-      "state": "unstable",
-      "lastUpdate": 1774372998140
+      "state": "up",
+      "lastUpdate": 1774415865426
     },
     {
       "id": "L-B1-B3",
@@ -550,13 +550,13 @@
       "to": "B3",
       "type": "wired",
       "bandwidthMbps": 800,
-      "utilization": 0.614,
-      "delayMs": 9.21,
-      "lossRate": 0.0285,
-      "snrDb": 20.03,
-      "health": "good",
+      "utilization": 0.201,
+      "delayMs": 17.01,
+      "lossRate": 0.0462,
+      "snrDb": 27.55,
+      "health": "warning",
       "state": "up",
-      "lastUpdate": 1774373073646
+      "lastUpdate": 1774416233272
     },
     {
       "id": "L-A1-B1",
@@ -564,13 +564,13 @@
       "to": "A1",
       "type": "wireless",
       "bandwidthMbps": 100,
-      "utilization": 0.321,
-      "delayMs": 59.11,
-      "lossRate": 0.0124,
-      "snrDb": 22.59,
+      "utilization": 0.239,
+      "delayMs": 74.5,
+      "lossRate": 0.0632,
+      "snrDb": 25.82,
       "health": "danger",
-      "state": "down",
-      "lastUpdate": 1774373043449
+      "state": "up",
+      "lastUpdate": 1774416049362
     },
     {
       "id": "L-A2-B1",
@@ -578,13 +578,13 @@
       "to": "A2",
       "type": "wireless",
       "bandwidthMbps": 100,
-      "utilization": 0.7,
-      "delayMs": 69.76,
-      "lossRate": 0.0177,
-      "snrDb": 29.96,
-      "health": "danger",
-      "state": "unstable",
-      "lastUpdate": 1774373082713
+      "utilization": 0.259,
+      "delayMs": 39.26,
+      "lossRate": 0.0599,
+      "snrDb": 10.11,
+      "health": "warning",
+      "state": "up",
+      "lastUpdate": 1774416191071
     },
     {
       "id": "L-A3-B2",
@@ -592,13 +592,13 @@
       "to": "A3",
       "type": "wireless",
       "bandwidthMbps": 100,
-      "utilization": 0.368,
-      "delayMs": 88.5,
-      "lossRate": 0.0641,
-      "snrDb": 26.84,
-      "health": "danger",
+      "utilization": 0.586,
+      "delayMs": 20.21,
+      "lossRate": 0.0791,
+      "snrDb": 18.62,
+      "health": "warning",
       "state": "up",
-      "lastUpdate": 1774373052515
+      "lastUpdate": 1774416251361
     },
     {
       "id": "L-A4-B3",
@@ -606,13 +606,13 @@
       "to": "A4",
       "type": "wireless",
       "bandwidthMbps": 100,
-      "utilization": 0.887,
-      "delayMs": 25.19,
-      "lossRate": 0.0246,
-      "snrDb": 17.83,
-      "health": "warning",
+      "utilization": 0.844,
+      "delayMs": 63.52,
+      "lossRate": 0.0409,
+      "snrDb": 15.54,
+      "health": "danger",
       "state": "up",
-      "lastUpdate": 1774372964871
+      "lastUpdate": 1774416133810
     },
     {
       "id": "L-A5-B3",
@@ -620,13 +620,13 @@
       "to": "A5",
       "type": "wireless",
       "bandwidthMbps": 100,
-      "utilization": 0.774,
-      "delayMs": 13.29,
-      "lossRate": 0.0477,
-      "snrDb": 11.91,
-      "health": "warning",
-      "state": "up",
-      "lastUpdate": 1774372989014
+      "utilization": 0.684,
+      "delayMs": 56.68,
+      "lossRate": 0.0924,
+      "snrDb": 26.53,
+      "health": "danger",
+      "state": "unstable",
+      "lastUpdate": 1774416290557
     },
     {
       "id": "L-A1-A2",
@@ -634,13 +634,13 @@
       "to": "A2",
       "type": "wireless",
       "bandwidthMbps": 50,
-      "utilization": 0.794,
-      "delayMs": 76.12,
-      "lossRate": 0.0297,
-      "snrDb": 16.62,
+      "utilization": 0.427,
+      "delayMs": 82.13,
+      "lossRate": 0.0266,
+      "snrDb": 12.58,
       "health": "danger",
       "state": "up",
-      "lastUpdate": 1774372916604
+      "lastUpdate": 1774416206137
     },
     {
       "id": "L-A2-A3",
@@ -648,13 +648,13 @@
       "to": "A3",
       "type": "wireless",
       "bandwidthMbps": 50,
-      "utilization": 0.898,
-      "delayMs": 84.05,
-      "lossRate": 0.0194,
-      "snrDb": 8.85,
-      "health": "danger",
+      "utilization": 0.076,
+      "delayMs": 54.14,
+      "lossRate": 0.0032,
+      "snrDb": 18.5,
+      "health": "warning",
       "state": "up",
-      "lastUpdate": 1774373088747
+      "lastUpdate": 1774416281512
     },
     {
       "id": "L-A3-A4",
@@ -662,13 +662,13 @@
       "to": "A4",
       "type": "wireless",
       "bandwidthMbps": 50,
-      "utilization": 0.706,
-      "delayMs": 46.61,
-      "lossRate": 0.0541,
-      "snrDb": 27.14,
+      "utilization": 0.768,
+      "delayMs": 46.17,
+      "lossRate": 0.04,
+      "snrDb": 13.93,
       "health": "warning",
-      "state": "up",
-      "lastUpdate": 1774373064591
+      "state": "unstable",
+      "lastUpdate": 1774416287544
     },
     {
       "id": "L-A4-A5",
@@ -676,13 +676,13 @@
       "to": "A5",
       "type": "wireless",
       "bandwidthMbps": 50,
-      "utilization": 0.377,
-      "delayMs": 7.87,
-      "lossRate": 0.0308,
-      "snrDb": 27.31,
+      "utilization": 0.498,
+      "delayMs": 29.31,
+      "lossRate": 0.01,
+      "snrDb": 25.85,
       "health": "warning",
-      "state": "unstable",
-      "lastUpdate": 1774373022273
+      "state": "up",
+      "lastUpdate": 1774416215183
     },
     {
       "id": "L-A1-U1",
@@ -690,13 +690,13 @@
       "to": "U1",
       "type": "wireless",
       "bandwidthMbps": 20,
-      "utilization": 0.622,
-      "delayMs": 58.83,
-      "lossRate": 0.0073,
-      "snrDb": 26.9,
-      "health": "warning",
+      "utilization": 0.941,
+      "delayMs": 66.52,
+      "lossRate": 0.0367,
+      "snrDb": 9.68,
+      "health": "danger",
       "state": "up",
-      "lastUpdate": 1774373079692
+      "lastUpdate": 1774416284527
     },
     {
       "id": "L-A1-U2",
@@ -704,13 +704,13 @@
       "to": "U2",
       "type": "wireless",
       "bandwidthMbps": 20,
-      "utilization": 0.176,
-      "delayMs": 9.45,
-      "lossRate": 0.061,
-      "snrDb": 14.41,
+      "utilization": 0.423,
+      "delayMs": 35.59,
+      "lossRate": 0.0349,
+      "snrDb": 15.68,
       "health": "warning",
-      "state": "unstable",
-      "lastUpdate": 1774373061570
+      "state": "up",
+      "lastUpdate": 1774416130796
     },
     {
       "id": "L-A2-U3",
@@ -718,13 +718,13 @@
       "to": "U3",
       "type": "wireless",
       "bandwidthMbps": 20,
-      "utilization": 0.227,
-      "delayMs": 53.94,
-      "lossRate": 0.0844,
-      "snrDb": 14.82,
-      "health": "danger",
+      "utilization": 0.442,
+      "delayMs": 24.9,
+      "lossRate": 0.0384,
+      "snrDb": 19.61,
+      "health": "warning",
       "state": "up",
-      "lastUpdate": 1774373058554
+      "lastUpdate": 1774416248349
     },
     {
       "id": "L-A2-U4",
@@ -732,13 +732,13 @@
       "to": "U4",
       "type": "wireless",
       "bandwidthMbps": 20,
-      "utilization": 0.152,
-      "delayMs": 5.34,
-      "lossRate": 0.0434,
-      "snrDb": 18.26,
-      "health": "warning",
+      "utilization": 0.114,
+      "delayMs": 88.37,
+      "lossRate": 0.0162,
+      "snrDb": 24.79,
+      "health": "danger",
       "state": "up",
-      "lastUpdate": 1774373091760
+      "lastUpdate": 1774416278497
     },
     {
       "id": "L-A3-U5",
@@ -746,13 +746,13 @@
       "to": "U5",
       "type": "wireless",
       "bandwidthMbps": 20,
-      "utilization": 0.483,
-      "delayMs": 57.33,
-      "lossRate": 0.099,
-      "snrDb": 16.26,
-      "health": "danger",
+      "utilization": 0.574,
+      "delayMs": 11.67,
+      "lossRate": 0.0228,
+      "snrDb": 13.73,
+      "health": "warning",
       "state": "up",
-      "lastUpdate": 1774373094766
+      "lastUpdate": 1774416269450
     },
     {
       "id": "L-A3-U6",
@@ -760,13 +760,13 @@
       "to": "U6",
       "type": "wireless",
       "bandwidthMbps": 20,
-      "utilization": 0.849,
-      "delayMs": 19.22,
-      "lossRate": 0.001,
-      "snrDb": 13.84,
+      "utilization": 0.563,
+      "delayMs": 21.34,
+      "lossRate": 0.0508,
+      "snrDb": 16.23,
       "health": "warning",
       "state": "up",
-      "lastUpdate": 1774373040425
+      "lastUpdate": 1774416254370
     },
     {
       "id": "L-A4-U7",
@@ -774,13 +774,13 @@
       "to": "U7",
       "type": "wireless",
       "bandwidthMbps": 20,
-      "utilization": 0.635,
-      "delayMs": 27.91,
-      "lossRate": 0.0669,
-      "snrDb": 9.87,
-      "health": "danger",
-      "state": "down",
-      "lastUpdate": 1774373070627
+      "utilization": 0.324,
+      "delayMs": 59.54,
+      "lossRate": 0.0226,
+      "snrDb": 10.2,
+      "health": "warning",
+      "state": "up",
+      "lastUpdate": 1774416139834
     },
     {
       "id": "L-A4-U8",
@@ -788,13 +788,13 @@
       "to": "U8",
       "type": "wireless",
       "bandwidthMbps": 20,
-      "utilization": 0.468,
-      "delayMs": 75.38,
-      "lossRate": 0.0161,
-      "snrDb": 11.57,
+      "utilization": 0.822,
+      "delayMs": 83.4,
+      "lossRate": 0.0994,
+      "snrDb": 24.07,
       "health": "danger",
-      "state": "up",
-      "lastUpdate": 1774372995126
+      "state": "unstable",
+      "lastUpdate": 1774416230257
     },
     {
       "id": "L-A5-U9",
@@ -802,13 +802,13 @@
       "to": "U9",
       "type": "wireless",
       "bandwidthMbps": 20,
-      "utilization": 0.614,
-      "delayMs": 66.99,
-      "lossRate": 0.0444,
-      "snrDb": 25.75,
-      "health": "danger",
-      "state": "unstable",
-      "lastUpdate": 1774373067610
+      "utilization": 0.16,
+      "delayMs": 31.57,
+      "lossRate": 0.0683,
+      "snrDb": 15.25,
+      "health": "warning",
+      "state": "up",
+      "lastUpdate": 1774416260405
     },
     {
       "id": "L-A5-U10",
@@ -816,35 +816,35 @@
       "to": "U10",
       "type": "wireless",
       "bandwidthMbps": 20,
-      "utilization": 0.595,
-      "delayMs": 47.2,
-      "lossRate": 0.065,
-      "snrDb": 19.18,
+      "utilization": 0.53,
+      "delayMs": 35.9,
+      "lossRate": 0.0553,
+      "snrDb": 16.3,
       "health": "warning",
       "state": "up",
-      "lastUpdate": 1774372992039
+      "lastUpdate": 1774416197104
     },
     {
-      "id": "L-A5-U-LIVE-165",
+      "id": "L-A5-U-LIVE-290",
       "from": "A5",
-      "to": "U-LIVE-165",
+      "to": "U-LIVE-290",
       "type": "wireless",
       "bandwidthMbps": 20.0,
-      "utilization": 0.602,
-      "delayMs": 7.99,
-      "lossRate": 0.0155,
-      "snrDb": 17.35,
+      "utilization": 0.638,
+      "delayMs": 11.18,
+      "lossRate": 0.0338,
+      "snrDb": 12.72,
       "health": "warning",
       "state": "up",
-      "lastUpdate": 1774373088747
+      "lastUpdate": 1774416284527
     }
   ],
   "metrics": {
-    "networkHealth": 0.8128,
-    "onlineRate": 1.0,
-    "avgDelay": 43.58,
-    "avgLoss": 0.0417,
-    "avgLoad": 0.4587,
+    "networkHealth": 0.7454,
+    "onlineRate": 0.8421,
+    "avgDelay": 45.36,
+    "avgLoss": 0.0444,
+    "avgLoad": 0.5384,
     "connected": true,
     "nodeCount": 19,
     "linkCount": 23

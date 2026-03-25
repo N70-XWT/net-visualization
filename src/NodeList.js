@@ -30,6 +30,7 @@ const LAYER_ORDER = ['backbone', 'access', 'mesh', 'edge'];
 const TYPE_ORDER = ['router', 'base-station', 'mesh-node', 'terminal', 'satellite'];
 const EMPTY_ARRAY = [];
 const EMPTY_OBJECT = {};
+const LIST_SCROLL_DELAY_MS = 320;
 
 function CollapsibleSection({ isOpen, children }) {
   const containerRef = useRef(null);
@@ -99,6 +100,8 @@ function NodeList(props) {
   const [internalCollapsed, setInternalCollapsed] = useState(!!props.defaultCollapsed);
   const nodes = props.nodes ?? EMPTY_ARRAY;
   const typeMetaMap = props.typeMeta ?? EMPTY_OBJECT;
+  const onToggle = props.onToggle;
+  const onSelectNode = props.onSelectNode;
 
   const iconMap = {
     router: RadioTower,
@@ -114,9 +117,12 @@ function NodeList(props) {
     type: {},
   });
   const selectedNodeId = props.selectedNodeId;
+  const focusedNodeId = props.focusedNodeId;
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) || null;
   const selectedMeta = selectedNode ? typeMetaMap[selectedNode.type] : null;
   const SelectedCollapsedIcon = selectedNode ? iconMap[selectedNode.type] || Circle : Circle;
+  const itemRefsById = useRef({});
+  const revealTimerRef = useRef(null);
 
   const isControlled = props.collapsed !== undefined;
   const collapsed = isControlled ? !!props.collapsed : internalCollapsed;
@@ -124,14 +130,14 @@ function NodeList(props) {
   function toggle() {
     const next = !collapsed;
     if (isControlled) {
-      props.onToggle && props.onToggle(next);
+      onToggle && onToggle(next);
     } else {
       setInternalCollapsed(next);
     }
   }
 
   function handleSelect(nodeId) {
-    props.onSelectNode && props.onSelectNode(nodeId);
+    onSelectNode && onSelectNode(nodeId);
   }
 
   function cycleGroupMode() {
@@ -204,6 +210,80 @@ function NodeList(props) {
   const currentGroupOption = GROUP_MODE_OPTIONS.find((option) => option.key === groupMode) || GROUP_MODE_OPTIONS[0];
   const currentGroupCollapse = groupCollapseState[groupMode] || EMPTY_OBJECT;
   const GroupModeIcon = currentGroupOption.icon;
+
+  useEffect(() => {
+    return () => {
+      if (revealTimerRef.current) {
+        clearTimeout(revealTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedNode) {
+      return;
+    }
+
+    if (collapsed) {
+      if (isControlled) {
+        onToggle && onToggle(false);
+      } else {
+        setInternalCollapsed(false);
+      }
+    }
+
+    const targetGroupKey = groupMode === 'layer'
+      ? (selectedNode.layer || 'other')
+      : (selectedNode.type || 'other');
+
+    setGroupCollapseState((prev) => {
+      const modeState = prev[groupMode] || {};
+      if (modeState[targetGroupKey] === false) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [groupMode]: {
+          ...modeState,
+          [targetGroupKey]: false,
+        },
+      };
+    });
+  }, [collapsed, groupMode, isControlled, onToggle, selectedNode]);
+
+  useEffect(() => {
+    if (!selectedNode || collapsed) {
+      return;
+    }
+
+    const targetGroupKey = groupMode === 'layer'
+      ? (selectedNode.layer || 'other')
+      : (selectedNode.type || 'other');
+    const isTargetGroupCollapsed = !!currentGroupCollapse[targetGroupKey];
+    const delay = isTargetGroupCollapsed ? LIST_SCROLL_DELAY_MS : 90;
+
+    if (revealTimerRef.current) {
+      clearTimeout(revealTimerRef.current);
+    }
+
+    revealTimerRef.current = setTimeout(() => {
+      const targetEl = itemRefsById.current[selectedNode.id];
+      if (!targetEl) {
+        return;
+      }
+      targetEl.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+        inline: 'nearest',
+      });
+    }, delay);
+
+    return () => {
+      if (revealTimerRef.current) {
+        clearTimeout(revealTimerRef.current);
+      }
+    };
+  }, [collapsed, currentGroupCollapse, groupMode, selectedNode]);
 
   return (
     <div
@@ -332,9 +412,18 @@ function NodeList(props) {
                       const TypeIcon = iconMap[node.type] || Circle;
                       const accentColor = meta.color || '#7f7f7f';
                       const isSelected = selectedNodeId === node.id;
+                      const isFocused = focusedNodeId === node.id;
+                      const isHighlighted = isSelected || isFocused;
                       return (
                         <li
                           key={node.id}
+                          ref={(el) => {
+                            if (el) {
+                              itemRefsById.current[node.id] = el;
+                            } else {
+                              delete itemRefsById.current[node.id];
+                            }
+                          }}
                           onClick={() => handleSelect(node.id)}
                           onKeyDown={(event) => {
                             if (event.key === 'Enter' || event.key === ' ') {
@@ -345,36 +434,47 @@ function NodeList(props) {
                           role="button"
                           tabIndex={0}
                           aria-pressed={isSelected}
-                          className={`group relative flex items-center gap-4 rounded-2xl border px-4 py-4 shadow-soft-glow backdrop-blur-lg transition duration-200 focus:outline-none focus:ring-2 ${
-                            isSelected
+                          className={`node-list-item group relative flex items-center gap-4 rounded-2xl border px-4 py-4 shadow-soft-glow backdrop-blur-lg transition duration-200 focus:outline-none focus:ring-2 ${
+                            isHighlighted
                               ? ''
                               : 'border-white/15 bg-white/10'
-                          }`}
+                          } ${isSelected ? 'node-list-item--selected' : ''} ${isFocused ? 'node-list-item--focused' : ''}`}
                           style={{
-                            borderColor: isSelected ? '#576690cc' : undefined,
-                            backgroundColor: isSelected ? '#57669019' : undefined,
+                            borderColor: isFocused ? '#22d3eecc' : (isSelected ? '#576690cc' : undefined),
+                            backgroundColor: isFocused ? '#22d3ee1a' : (isSelected ? '#57669019' : undefined),
                             '--ring-color': '#576690b3',
-                            boxShadow: `0 20px 35px -18px ${accentColor}55`
+                            boxShadow: isFocused
+                              ? `0 0 0 1px #22d3ee88, 0 20px 35px -18px ${accentColor}66`
+                              : `0 20px 35px -18px ${accentColor}55`,
                           }}
                           onMouseEnter={(e) => {
-                            if (!isSelected) {
-                              e.target.style.borderColor = '#57669099';
-                              e.target.style.backgroundColor = '#57669019';
+                            if (!isHighlighted) {
+                              e.currentTarget.style.borderColor = '#57669099';
+                              e.currentTarget.style.backgroundColor = '#57669019';
                             }
                           }}
                           onMouseLeave={(e) => {
-                            if (!isSelected) {
-                              e.target.style.borderColor = 'rgba(255,255,255,0.15)';
-                              e.target.style.backgroundColor = 'rgba(255,255,255,0.1)';
+                            if (!isHighlighted) {
+                              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
+                              e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)';
                             }
                           }}
                           onFocus={(e) => {
-                            e.target.style.boxShadow = `0 0 0 2px #576690b3`;
+                            e.currentTarget.style.boxShadow = '0 0 0 2px #576690b3';
                           }}
                           onBlur={(e) => {
-                            e.target.style.boxShadow = 'none';
+                            e.currentTarget.style.boxShadow = isFocused
+                              ? `0 0 0 1px #22d3ee88, 0 20px 35px -18px ${accentColor}66`
+                              : `0 20px 35px -18px ${accentColor}55`;
                           }}
                         >
+                          <span
+                            aria-hidden="true"
+                            className={`pointer-events-none absolute left-0 top-2 bottom-2 w-1 rounded-r-full transition-opacity duration-200 ${
+                              isHighlighted ? 'opacity-100' : 'opacity-0'
+                            }`}
+                            style={{ backgroundColor: isFocused ? '#22d3ee' : '#576690' }}
+                          />
                           <span className="relative flex h-12 w-12 items-center justify-center rounded-xl bg-deep-navy/40 ring-1 ring-inset ring-white/20">
                             <TypeIcon className="h-6 w-6" style={{ color: '#576690' }} />
                             <span

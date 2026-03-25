@@ -1,9 +1,9 @@
 {
-  "timestamp": 1774373079692,
+  "timestamp": 1774416275481,
   "eventType": "LINK_REMOVE",
   "payload": {
-    "linkId": "L-A5-U-LIVE-164",
+    "linkId": "L-A5-U-LIVE-289",
     "from": "A5",
-    "to": "U-LIVE-164"
+    "to": "U-LIVE-289"
   }
 }

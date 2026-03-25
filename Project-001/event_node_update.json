@@ -1,20 +1,20 @@
 {
-  "timestamp": 1774373094766,
+  "timestamp": 1774416290557,
   "eventType": "NODE_UPDATE",
   "payload": {
-    "nodeId": "U7",
+    "nodeId": "A5",
     "changes": {
       "state": {
         "online": true,
-        "status": "busy",
-        "lastSeen": 1774373094766
+        "status": "online",
+        "lastSeen": 1774416290557
       },
       "metrics": {
-        "cpu": 0.639,
-        "load": 0.694,
+        "cpu": 0.306,
+        "load": 0.226,
         "cache": 0.0,
-        "energy": 84.7,
-        "capacity": 50
+        "energy": 59.96,
+        "capacity": 200
       },
       "alarmLevel": "normal"
     }
