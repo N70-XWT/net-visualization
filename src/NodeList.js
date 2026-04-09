@@ -1,10 +1,10 @@
-// NodeList.js - 节点列表组件（带展开 / 收起）
+// NodeList.js - 鑺傜偣鍒楄〃缁勪欢锛堝甫灞曞紑 / 鏀惰捣锛?
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   RadioTower,
-  Drone,
+  Server,
+  Camera,
   Users,
-  Satellite,
   ListTree,
   ChevronLeft,
   ChevronRight,
@@ -15,19 +15,35 @@ import {
 } from 'lucide-react';
 
 const GROUP_MODE_OPTIONS = [
-  { key: 'layer', label: '按网络层级', icon: Layers },
-  { key: 'type', label: '按节点类型', icon: LayoutGrid },
+  { key: 'layer', label: 'Group By Layer', icon: Layers },
+  { key: 'type', label: 'Group By Type', icon: LayoutGrid },
 ];
 
 const LAYER_META = {
-  backbone: { label: '骨干网', color: '#1f78b4' },
-  access: { label: '接入网', color: '#f28e2b' },
-  mesh: { label: '自组网', color: '#59a14f' },
-  edge: { label: '终端层', color: '#9467bd' },
+  backbone: { label: 'Core Network', color: '#60a5fa' },
+  access: { label: 'Aggregation Layer', color: '#22d3ee' },
+  mesh: { label: 'Edge Transport', color: '#34d399' },
+  edge: { label: 'Access Sensing', color: '#f97316' },
 };
 
 const LAYER_ORDER = ['backbone', 'access', 'mesh', 'edge'];
-const TYPE_ORDER = ['router', 'base-station', 'mesh-node', 'terminal', 'satellite'];
+const TYPE_ORDER = [
+  'network-center',
+  'campus-gateway',
+  'building-gateway',
+  'edge-server',
+  'camera',
+  'env-sensor',
+  'access-control',
+  'smart-meter',
+  'streetlight-controller',
+  'parking-sensor',
+  'lab-terminal',
+  'classroom-terminal',
+  'dorm-device',
+  'security-platform',
+  'iot-device',
+];
 const EMPTY_ARRAY = [];
 const EMPTY_OBJECT = {};
 const LIST_SCROLL_DELAY_MS = 320;
@@ -90,12 +106,12 @@ function CollapsibleSection({ isOpen, children }) {
   );
 }
 
-// 这是一个函数式组件，接收 props：
-// - props.nodes: 节点数组
-// - props.defaultCollapsed: 可选，初始是否折叠（布尔）
-// - props.collapsed: （可选）受控折叠状态，如果提供组件将变为受控组件
-// - props.onToggle: （可选）当用户点击切换时调用，接收新布尔值
-// - props.typeMeta: （可选）节点类型元数据映射，用于显示友好名称与颜色
+// 杩欐槸涓€涓嚱鏁板紡缁勪欢锛屾帴鏀?props锛?
+// - props.nodes: 鑺傜偣鏁扮粍
+// - props.defaultCollapsed: 鍙€夛紝鍒濆鏄惁鎶樺彔锛堝竷灏旓級
+// - props.collapsed: 锛堝彲閫夛級鍙楁帶鎶樺彔鐘舵€侊紝濡傛灉鎻愪緵缁勪欢灏嗗彉涓哄彈鎺х粍浠?
+// - props.onToggle: 锛堝彲閫夛級褰撶敤鎴风偣鍑诲垏鎹㈡椂璋冪敤锛屾帴鏀舵柊甯冨皵鍊?
+// - props.typeMeta: 锛堝彲閫夛級鑺傜偣绫诲瀷鍏冩暟鎹槧灏勶紝鐢ㄤ簬鏄剧ず鍙嬪ソ鍚嶇О涓庨鑹?
 function NodeList(props) {
   const [internalCollapsed, setInternalCollapsed] = useState(!!props.defaultCollapsed);
   const nodes = props.nodes ?? EMPTY_ARRAY;
@@ -104,11 +120,22 @@ function NodeList(props) {
   const onSelectNode = props.onSelectNode;
 
   const iconMap = {
-    router: RadioTower,
-    'base-station': RadioTower,
-    'mesh-node': Drone,
-    terminal: Users,
-    satellite: Satellite,
+    'network-center': Server,
+    'campus-gateway': RadioTower,
+    'building-gateway': RadioTower,
+    'edge-server': Server,
+    camera: Camera,
+    'env-sensor': Camera,
+    'access-control': RadioTower,
+    'smart-meter': Server,
+    'streetlight-controller': RadioTower,
+    'parking-sensor': Camera,
+    'lab-terminal': Users,
+    'classroom-terminal': Users,
+    'dorm-device': Users,
+    'library-terminal': Users,
+    'security-platform': Server,
+    'iot-device': Users,
   };
 
   const [groupMode, setGroupMode] = useState(GROUP_MODE_OPTIONS[0].key);
@@ -168,7 +195,7 @@ function NodeList(props) {
       const groupsMap = nodes.reduce((acc, node) => {
         const key = node.layer || 'other';
         if (!acc[key]) {
-          const meta = LAYER_META[key] || { label: key || '其它层级', color: '#7f7f7f' };
+          const meta = LAYER_META[key] || { label: key || 'Other Layer', color: '#7f7f7f' };
           acc[key] = {
             key,
             label: meta.label,
@@ -189,7 +216,7 @@ function NodeList(props) {
     const groupsMap = nodes.reduce((acc, node) => {
       const key = node.type || 'other';
       if (!acc[key]) {
-        const meta = typeMetaMap[key] || { label: key || '其它类型', color: '#7f7f7f' };
+        const meta = typeMetaMap[key] || { label: key || 'Other Type', color: '#7f7f7f' };
         acc[key] = {
           key,
           label: meta.label,
@@ -298,7 +325,7 @@ function NodeList(props) {
           <div>
             <p className="text-xs uppercase tracking-[0.35em]" style={{ color: '#576690b3' }}>Node Cluster</p>
             <h3 className="mt-3 text-lg font-semibold text-slate-900">
-              节点列表 <span className="ml-2 text-sm font-normal text-emerald-700">({nodes.length})</span>
+              Network Node List <span className="ml-2 text-sm font-normal text-emerald-700">({nodes.length})</span>
             </h3>
           </div>
         ) : (
@@ -323,7 +350,7 @@ function NodeList(props) {
               e.target.style.borderColor = collapsed ? 'rgba(255,255,255,0.2)' : '#57669060';
               e.target.style.backgroundColor = collapsed ? 'rgba(255,255,255,0.1)' : '#57669010';
             }}
-            aria-label={`切换分组模式，当前：${currentGroupOption.label}`}
+            aria-label={`Switch group mode, current: ${currentGroupOption.label}`}
           >
             <GroupModeIcon className="h-4 w-4" />
             {!collapsed && <span>{currentGroupOption.label}</span>}
@@ -344,7 +371,7 @@ function NodeList(props) {
               e.target.style.borderColor = '#57669066';
               e.target.style.backgroundColor = '#57669019';
             }}
-            aria-label={collapsed ? '展开节点列表' : '收起节点列表'}
+            aria-label={collapsed ? 'Expand node list' : 'Collapse node list'}
           >
             {collapsed ? (
               <ChevronRight className="h-4 w-4" />
@@ -408,7 +435,7 @@ function NodeList(props) {
                 <CollapsibleSection isOpen={!isGroupCollapsed}>
                   <ul className="flex flex-col gap-4 pt-3">
                     {group.nodes.map((node) => {
-                      const meta = typeMetaMap[node.type] || { label: node.type || '未知类型', color: '#7f7f7f' };
+                      const meta = typeMetaMap[node.type] || { label: node.type || 'Unknown Type', color: '#7f7f7f' };
                       const TypeIcon = iconMap[node.type] || Circle;
                       const accentColor = meta.color || '#7f7f7f';
                       const isSelected = selectedNodeId === node.id;
@@ -499,7 +526,7 @@ function NodeList(props) {
                               </span>
                               <span className="flex items-center gap-1 text-slate-600">
                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                                层级：{node.layer || '未知'}
+                                Layer: {node.layer || 'unknown'}
                               </span>
                             </div>
                           </div>
@@ -514,10 +541,10 @@ function NodeList(props) {
         </div>
       ) : (
         <div className="flex flex-1 flex-col items-center justify-center gap-5" style={{ color: '#576690b3' }}>
-          <span
-            className="relative flex h-12 w-12 items-center justify-center rounded-full border border-aurora-green/40 bg-aurora-green/5"
-            title={selectedNode ? `${selectedNode.name} - ${selectedMeta ? selectedMeta.label : '未知类型'}` : '未选择节点'}
-          >
+            <span
+              className="relative flex h-12 w-12 items-center justify-center rounded-full border border-aurora-green/40 bg-aurora-green/5"
+              title={selectedNode ? `${selectedNode.name} - ${selectedMeta ? selectedMeta.label : 'Unknown Type'}` : 'No Node Selected'}
+            >
             <SelectedCollapsedIcon className="h-6 w-6" style={{ color: '#576690' }} />
           </span>
           <span className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/10">
@@ -533,3 +560,4 @@ function NodeList(props) {
 }
 
 export default React.memo(NodeList);
+

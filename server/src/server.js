@@ -305,6 +305,235 @@ function deriveAlertsFromTopology(topology) {
   return alerts.sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
 }
 
+function getLinkDelayWeight(link) {
+  const delayCandidates = [link?.delayMs, link?.delay];
+  for (const candidate of delayCandidates) {
+    const parsed = Number(candidate);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return 1;
+}
+
+function buildTopologyAdjacency(topology) {
+  const nodes = Array.isArray(topology?.nodes) ? topology.nodes : [];
+  const links = Array.isArray(topology?.links) ? topology.links : [];
+  const nodeIds = nodes
+    .map((node) => String(node?.id || '').trim())
+    .filter(Boolean);
+  const nodeIdSet = new Set(nodeIds);
+  const adjacency = new Map(nodeIds.map((nodeId) => [nodeId, []]));
+
+  links.forEach((link) => {
+    const linkId = String(link?.id || '').trim();
+    const from = String(link?.from || '').trim();
+    const to = String(link?.to || '').trim();
+    if (!linkId || !from || !to) {
+      return;
+    }
+    if (!nodeIdSet.has(from) || !nodeIdSet.has(to)) {
+      return;
+    }
+
+    const state = String(link?.state || 'up').trim().toLowerCase();
+    const edge = {
+      linkId,
+      weight: getLinkDelayWeight(link),
+      state,
+    };
+
+    adjacency.get(from).push({ ...edge, to });
+    adjacency.get(to).push({ ...edge, to: from });
+  });
+
+  return {
+    nodeIds,
+    nodeIdSet,
+    adjacency,
+  };
+}
+
+function analyzeTopologyConnectivity(topology) {
+  const { nodeIds, adjacency } = buildTopologyAdjacency(topology);
+  if (!nodeIds.length) {
+    return {
+      connected: true,
+      componentCount: 0,
+      largestComponentSize: 0,
+      largestComponentRatio: 1,
+      isolatedNodeIds: [],
+      components: [],
+      evaluatedAt: new Date().toISOString(),
+    };
+  }
+
+  const visited = new Set();
+  const components = [];
+
+  nodeIds.forEach((nodeId) => {
+    if (visited.has(nodeId)) {
+      return;
+    }
+
+    const stack = [nodeId];
+    const componentNodes = [];
+    while (stack.length) {
+      const current = stack.pop();
+      if (visited.has(current)) {
+        continue;
+      }
+      visited.add(current);
+      componentNodes.push(current);
+
+      const neighbors = adjacency.get(current) || [];
+      neighbors.forEach((edge) => {
+        if (!visited.has(edge.to)) {
+          stack.push(edge.to);
+        }
+      });
+    }
+
+    componentNodes.sort();
+    components.push(componentNodes);
+  });
+
+  components.sort((left, right) => right.length - left.length);
+  const largestComponentSize = components[0]?.length || 0;
+  const componentSummaries = components.map((item, index) => ({
+    id: `PART-${String(index + 1).padStart(3, '0')}`,
+    size: item.length,
+    nodeIds: item,
+  }));
+  const isolatedNodeIds = nodeIds.filter((nodeId) => (adjacency.get(nodeId) || []).length === 0);
+
+  return {
+    connected: components.length <= 1,
+    componentCount: components.length,
+    largestComponentSize,
+    largestComponentRatio: Number((largestComponentSize / nodeIds.length).toFixed(4)),
+    isolatedNodeIds,
+    components: componentSummaries,
+    evaluatedAt: new Date().toISOString(),
+  };
+}
+
+function analyzeShortestPath(topology, startNodeId, endNodeId) {
+  const start = String(startNodeId || '').trim();
+  const end = String(endNodeId || '').trim();
+  const { nodeIds, nodeIdSet, adjacency } = buildTopologyAdjacency(topology);
+
+  if (!start || !end) {
+    return {
+      error: 'INVALID_NODE',
+      message: 'Both "from" and "to" are required',
+    };
+  }
+  if (!nodeIdSet.has(start) || !nodeIdSet.has(end)) {
+    return {
+      error: 'NODE_NOT_FOUND',
+      message: 'Path endpoints not found in current topology',
+    };
+  }
+  if (start === end) {
+    return {
+      startNodeId: start,
+      endNodeId: end,
+      reachable: true,
+      hopCount: 0,
+      totalDelayMs: 0,
+      pathNodeIds: [start],
+      pathLinkIds: [],
+      evaluatedAt: new Date().toISOString(),
+    };
+  }
+
+  const dist = new Map(nodeIds.map((nodeId) => [nodeId, Number.POSITIVE_INFINITY]));
+  const prevNode = new Map();
+  const prevLink = new Map();
+  const unresolved = new Set(nodeIds);
+  dist.set(start, 0);
+
+  while (unresolved.size) {
+    let current = null;
+    let currentDist = Number.POSITIVE_INFINITY;
+
+    unresolved.forEach((nodeId) => {
+      const value = dist.get(nodeId);
+      if (value < currentDist) {
+        currentDist = value;
+        current = nodeId;
+      }
+    });
+
+    if (current === null || !Number.isFinite(currentDist)) {
+      break;
+    }
+
+    unresolved.delete(current);
+    if (current === end) {
+      break;
+    }
+
+    const neighbors = adjacency.get(current) || [];
+    neighbors.forEach((edge) => {
+      if (!unresolved.has(edge.to)) {
+        return;
+      }
+      // Keep path semantics aligned with Python shortest_path: links in down state are excluded.
+      if (edge.state === 'down') {
+        return;
+      }
+
+      const candidate = currentDist + edge.weight;
+      if (candidate < dist.get(edge.to)) {
+        dist.set(edge.to, candidate);
+        prevNode.set(edge.to, current);
+        prevLink.set(edge.to, edge.linkId);
+      }
+    });
+  }
+
+  const bestDistance = dist.get(end);
+  if (!Number.isFinite(bestDistance)) {
+    return {
+      startNodeId: start,
+      endNodeId: end,
+      reachable: false,
+      hopCount: 0,
+      totalDelayMs: null,
+      pathNodeIds: [],
+      pathLinkIds: [],
+      evaluatedAt: new Date().toISOString(),
+    };
+  }
+
+  const pathNodeIds = [];
+  const pathLinkIds = [];
+  let cursor = end;
+  while (cursor) {
+    pathNodeIds.push(cursor);
+    const viaLink = prevLink.get(cursor);
+    if (viaLink) {
+      pathLinkIds.push(viaLink);
+    }
+    cursor = prevNode.get(cursor);
+  }
+  pathNodeIds.reverse();
+  pathLinkIds.reverse();
+
+  return {
+    startNodeId: start,
+    endNodeId: end,
+    reachable: true,
+    hopCount: Math.max(0, pathNodeIds.length - 1),
+    totalDelayMs: Number(bestDistance.toFixed(3)),
+    pathNodeIds,
+    pathLinkIds,
+    evaluatedAt: new Date().toISOString(),
+  };
+}
+
 function buildPlaybackFrameSignature(frame) {
   const topologyUpdatedAt = String(frame?.topology?.meta?.updatedAt || '');
   const snapshotAt = String(frame?.situation?.snapshotAt || '');
@@ -591,6 +820,39 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (pathname === '/api/analysis/connectivity') {
+    capturePlaybackFrame();
+    const topology = repository.getTopology();
+    sendJson(res, 200, traceId, {
+      success: true,
+      data: analyzeTopologyConnectivity(topology),
+    });
+    return;
+  }
+
+  if (pathname === '/api/analysis/path') {
+    capturePlaybackFrame();
+    const fromNodeId = searchParams.get('from');
+    const toNodeId = searchParams.get('to');
+    const topology = repository.getTopology();
+    const result = analyzeShortestPath(topology, fromNodeId, toNodeId);
+
+    if (result?.error === 'INVALID_NODE') {
+      sendError(res, 400, traceId, result.error, result.message);
+      return;
+    }
+    if (result?.error === 'NODE_NOT_FOUND') {
+      sendError(res, 404, traceId, result.error, result.message);
+      return;
+    }
+
+    sendJson(res, 200, traceId, {
+      success: true,
+      data: result,
+    });
+    return;
+  }
+
   const nodeId = parseEntityId(pathname, '/api/nodes/');
   if (nodeId) {
     const node = repository.getNodeById(nodeId);
@@ -658,7 +920,7 @@ server.listen(PORT, () => {
   } else {
     console.log('Python data: disabled by USE_PYTHON_EXPORTS=false');
   }
-  console.log('REST APIs: /api/topology, /api/nodes/:id, /api/links/:id, /api/situation/current, /api/events, /api/alerts, /api/playback/frames, POST /api/topology/events, POST /api/python/commands');
+  console.log('REST APIs: /api/topology, /api/nodes/:id, /api/links/:id, /api/situation/current, /api/events, /api/alerts, /api/playback/frames, /api/analysis/connectivity, /api/analysis/path, POST /api/topology/events, POST /api/python/commands');
   console.log('========================================');
 });
 

@@ -74,6 +74,18 @@ export async function getPlaybackFrames(limit = 50) {
   return requestJson(`/api/playback/frames?limit=${encodeURIComponent(String(limit))}`);
 }
 
+export async function getConnectivityAnalysis() {
+  return requestJson('/api/analysis/connectivity');
+}
+
+export async function getShortestPathAnalysis(fromNodeId, toNodeId) {
+  const params = new URLSearchParams({
+    from: String(fromNodeId || ''),
+    to: String(toNodeId || ''),
+  });
+  return requestJson(`/api/analysis/path?${params.toString()}`);
+}
+
 export async function sendPythonCommand(command) {
   return requestJsonWithOptions('/api/python/commands', {
     method: 'POST',
