@@ -1,10 +1,10 @@
 {
-  "networkHealth": 0.781,
-  "onlineRate": 0.9444,
-  "avgDelay": 47.0236,
-  "avgLoss": 0.0514,
-  "avgLoad": 0.4899,
+  "networkHealth": 0.6943,
+  "onlineRate": 0.7368,
+  "avgDelay": 55.8022,
+  "avgLoss": 0.0429,
+  "avgLoad": 0.533,
   "connected": true,
-  "nodeCount": 18,
-  "linkCount": 22
+  "nodeCount": 19,
+  "linkCount": 23
 }

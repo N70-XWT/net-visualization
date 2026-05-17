@@ -18,6 +18,91 @@ const LAYER_RANK = {
   access: 2,
   backbone: 3,
 };
+const DYNAMIC_LINK_ID_PREFIX = 'DYN-LNK-';
+const DYNAMIC_RELATION_ID_PREFIX = 'CLR-DYN-';
+const DYNAMIC_NODE_DEFS = [
+  {
+    id: 'MGU-001',
+    name: 'Mobile User 01',
+    type: 'terminal',
+    layer: 'access',
+    role: 'dorm-device',
+    preferredAnchorId: 'U3',
+    zone: 'dorm-area',
+    motion: {
+      radiusLatM: 36,
+      radiusLngM: 24,
+      periodSec: 180,
+      phaseDeg: 24,
+    },
+    altitudeBase: 1.8,
+    altitudeWaveM: 0.6,
+  },
+  {
+    id: 'MGU-002',
+    name: 'Mobile User 02',
+    type: 'terminal',
+    layer: 'access',
+    role: 'classroom-terminal',
+    preferredAnchorId: 'U8',
+    zone: 'teaching-area',
+    motion: {
+      radiusLatM: 32,
+      radiusLngM: 18,
+      periodSec: 210,
+      phaseDeg: 166,
+    },
+    altitudeBase: 1.6,
+    altitudeWaveM: 0.5,
+  },
+  {
+    id: 'MUAV-001',
+    name: 'UAV Relay 01',
+    type: 'mesh-node',
+    layer: 'mesh',
+    role: 'edge-server',
+    preferredAnchorId: 'A2',
+    zone: 'lab-area',
+    motion: {
+      radiusLatM: 130,
+      radiusLngM: 96,
+      periodSec: 240,
+      phaseDeg: 52,
+    },
+    altitudeBase: 30,
+    altitudeWaveM: 6,
+  },
+  {
+    id: 'MUAV-002',
+    name: 'UAV Relay 02',
+    type: 'mesh-node',
+    layer: 'mesh',
+    role: 'edge-server',
+    preferredAnchorId: 'A4',
+    zone: 'stadium-area',
+    motion: {
+      radiusLatM: 110,
+      radiusLngM: 84,
+      periodSec: 255,
+      phaseDeg: 218,
+    },
+    altitudeBase: 27,
+    altitudeWaveM: 5.5,
+  },
+];
+const DYNAMIC_NODE_ID_SET = new Set(DYNAMIC_NODE_DEFS.map((item) => item.id));
+const DEFAULT_MOTION_CENTER = { lat: 34.1246, lng: 108.8339 };
+const LAYER_CENTER_BY_KEY = {
+  access: { lat: 34.1262, lng: 108.8328 },
+  mesh: { lat: 34.1244, lng: 108.8345 },
+  backbone: { lat: 34.1239, lng: 108.8362 },
+  edge: { lat: 34.1265, lng: 108.8332 },
+};
+const DYNAMIC_DEFAULT_CANDIDATE_IDS = {
+  access: ['U1', 'U2', 'U3', 'U4', 'U5', 'U6', 'U7', 'U8', 'U9', 'U10'],
+  mesh: ['A1', 'A2', 'A3', 'A4', 'A5'],
+  backbone: ['B1', 'B2', 'B3'],
+};
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -30,6 +115,20 @@ function clamp(value, min, max) {
 function toFiniteNumber(value, fallback = 0) {
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
+}
+
+function roundNumber(value, digits = 6) {
+  return Number(toFiniteNumber(value, 0).toFixed(digits));
+}
+
+function hashString(input) {
+  const text = String(input || '');
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }
 
 function toSafeString(value, fallback) {
@@ -53,9 +152,140 @@ function toIsoTimestamp(value) {
   return new Date().toISOString();
 }
 
+function toRadians(deg) {
+  return (deg * Math.PI) / 180;
+}
+
+function metersToLatDelta(meters) {
+  return toFiniteNumber(meters, 0) / 111000;
+}
+
+function metersToLngDelta(meters, lat) {
+  const safeLat = toFiniteNumber(lat, DEFAULT_MOTION_CENTER.lat);
+  const metersPerDeg = 111000 * Math.cos(toRadians(safeLat));
+  if (!metersPerDeg) {
+    return 0;
+  }
+  return toFiniteNumber(meters, 0) / metersPerDeg;
+}
+
 function parseTimestamp(value) {
   const parsed = Date.parse(value || 0);
   return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function distanceMeters(fromGeo, toGeo) {
+  if (!fromGeo || !toGeo) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const fromLat = toFiniteNumber(fromGeo.lat, NaN);
+  const fromLng = toFiniteNumber(fromGeo.lng, NaN);
+  const toLat = toFiniteNumber(toGeo.lat, NaN);
+  const toLng = toFiniteNumber(toGeo.lng, NaN);
+  if (
+    !Number.isFinite(fromLat) ||
+    !Number.isFinite(fromLng) ||
+    !Number.isFinite(toLat) ||
+    !Number.isFinite(toLng)
+  ) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const avgLatRad = toRadians((fromLat + toLat) / 2);
+  const deltaLat = toRadians(toLat - fromLat);
+  const deltaLng = toRadians(toLng - fromLng);
+  const x = deltaLng * Math.cos(avgLatRad);
+  const y = deltaLat;
+  return Math.sqrt((x * x) + (y * y)) * 6371000;
+}
+
+function isInsideCampusMotionWindow(geo) {
+  if (!geo) {
+    return false;
+  }
+  const lat = toFiniteNumber(geo.lat, NaN);
+  const lng = toFiniteNumber(geo.lng, NaN);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return false;
+  }
+  return lat >= 34.118 && lat <= 34.132 && lng >= 108.826 && lng <= 108.842;
+}
+
+function getLayerMotionCenter(layer) {
+  return LAYER_CENTER_BY_KEY[layer] || DEFAULT_MOTION_CENTER;
+}
+
+function buildVirtualAnchorGeo(nodeId, layer) {
+  const center = getLayerMotionCenter(layer);
+  const hash = Math.abs(hashString(nodeId));
+  const angle = ((hash % 360) * Math.PI) / 180;
+  const latRadiusM = layer === 'backbone' ? 90 : (layer === 'mesh' ? 120 : 135);
+  const lngRadiusM = layer === 'backbone' ? 120 : (layer === 'mesh' ? 95 : 80);
+  const lat = center.lat + metersToLatDelta(Math.sin(angle) * latRadiusM);
+  const lng = center.lng + metersToLngDelta(Math.cos(angle) * lngRadiusM, center.lat);
+  return {
+    lat: roundNumber(lat, 6),
+    lng: roundNumber(lng, 6),
+    altitude: layer === 'backbone' ? 44 : (layer === 'mesh' ? 22 : 6),
+  };
+}
+
+function buildOrbitGeo(anchorGeo, nodeDef, elapsedSec) {
+  const motion = nodeDef.motion || {};
+  const baseLat = toFiniteNumber(anchorGeo?.lat, DEFAULT_MOTION_CENTER.lat);
+  const baseLng = toFiniteNumber(anchorGeo?.lng, DEFAULT_MOTION_CENTER.lng);
+  const periodSec = Math.max(60, toFiniteNumber(motion.periodSec, 180));
+  const phaseRad = toRadians(toFiniteNumber(motion.phaseDeg, 0));
+  const angle = ((elapsedSec / periodSec) * Math.PI * 2) + phaseRad;
+  const latRadius = toFiniteNumber(motion.radiusLatM, 25);
+  const lngRadius = toFiniteNumber(motion.radiusLngM, 25);
+  const altitudeBase = toFiniteNumber(nodeDef.altitudeBase, 0);
+  const altitudeWave = toFiniteNumber(nodeDef.altitudeWaveM, 0);
+
+  return {
+    lat: roundNumber(baseLat + metersToLatDelta(Math.sin(angle) * latRadius), 6),
+    lng: roundNumber(baseLng + metersToLngDelta(Math.cos(angle) * lngRadius, baseLat), 6),
+    altitude: roundNumber(Math.max(0, altitudeBase + altitudeWave * Math.sin(angle * 0.75)), 2),
+  };
+}
+
+function normalizeNodeGeoForMotion(node) {
+  const geo = node?.location?.geo;
+  if (isInsideCampusMotionWindow(geo)) {
+    return {
+      lat: roundNumber(geo.lat, 6),
+      lng: roundNumber(geo.lng, 6),
+      altitude: roundNumber(geo.altitude, 2),
+    };
+  }
+  return buildVirtualAnchorGeo(node?.id || '', node?.layer || 'access');
+}
+
+function buildDynamicRelationFromLink(link, nodeById, index) {
+  const fromNode = nodeById.get(link.from);
+  const toNode = nodeById.get(link.to);
+  if (!fromNode || !toNode) {
+    return null;
+  }
+
+  const fromLayer = String(fromNode.layer || '').toLowerCase();
+  const toLayer = String(toNode.layer || '').toLowerCase();
+  let relationType = 'relay';
+  if (fromLayer !== toLayer) {
+    relationType =
+      fromLayer === 'access' || toLayer === 'access'
+        ? 'access'
+        : 'backhaul';
+  }
+
+  return {
+    id: `${DYNAMIC_RELATION_ID_PREFIX}${String(index).padStart(3, '0')}`,
+    fromNodeId: link.from,
+    toNodeId: link.to,
+    relationType,
+    notes: `Derived from ${link.id}`,
+  };
 }
 
 function readJsonFileSafe(filePath) {
@@ -496,6 +726,12 @@ export class PythonFileNetworkRepository extends NetworkRepository {
     this.dataDir = options.dataDir;
     this.runtimeEventsFilePath = options.runtimeEventsFilePath;
     this.fallbackRepository = options.fallbackRepository || null;
+    this.dynamicMotionStartMs = Date.now();
+    this.dynamicMotionStepMs = Math.max(
+      1000,
+      Number.parseInt(process.env.DYNAMIC_NODE_STEP_MS || '1000', 10) || 1000
+    );
+    this.dynamicLinkTargetByKey = new Map();
 
     this.snapshotFilePath = path.join(this.dataDir, 'snapshot.json');
     this.metricsFilePath = path.join(this.dataDir, 'metrics.json');
@@ -584,10 +820,353 @@ export class PythonFileNetworkRepository extends NetworkRepository {
     fs.writeFileSync(this.runtimeEventsFilePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
   }
 
+  #resolveCandidateIds(baseNodes, layerKey) {
+    const filtered = baseNodes
+      .filter((node) => node && !DYNAMIC_NODE_ID_SET.has(node.id) && String(node.layer || '') === layerKey)
+      .map((node) => node.id);
+    if (filtered.length) {
+      return filtered;
+    }
+
+    const nodeIdSet = new Set(
+      baseNodes
+        .filter((node) => node && !DYNAMIC_NODE_ID_SET.has(node.id))
+        .map((node) => node.id)
+    );
+    const fallbackIds = DYNAMIC_DEFAULT_CANDIDATE_IDS[layerKey] || [];
+    const fallback = fallbackIds.filter((nodeId) => nodeIdSet.has(nodeId));
+    if (fallback.length) {
+      return fallback;
+    }
+
+    return baseNodes
+      .filter((node) => node && !DYNAMIC_NODE_ID_SET.has(node.id))
+      .map((node) => node.id)
+      .slice(0, 6);
+  }
+
+  #pickAnchorWithHysteresis(key, movingGeo, candidateIds, geoByNodeId, hysteresisMeters = 30) {
+    if (!movingGeo || !Array.isArray(candidateIds) || !candidateIds.length) {
+      this.dynamicLinkTargetByKey.delete(key);
+      return null;
+    }
+
+    const candidates = candidateIds
+      .map((candidateId) => {
+        const targetGeo = geoByNodeId.get(candidateId);
+        if (!targetGeo) {
+          return null;
+        }
+        return {
+          id: candidateId,
+          distance: distanceMeters(movingGeo, targetGeo),
+        };
+      })
+      .filter(Boolean)
+      .sort((left, right) => left.distance - right.distance);
+
+    if (!candidates.length) {
+      this.dynamicLinkTargetByKey.delete(key);
+      return null;
+    }
+
+    const best = candidates[0];
+    const previousId = this.dynamicLinkTargetByKey.get(key);
+    const previousCandidate = previousId
+      ? candidates.find((item) => item.id === previousId)
+      : null;
+    const selected =
+      previousCandidate &&
+      previousCandidate.id !== best.id &&
+      best.distance + Math.max(5, toFiniteNumber(hysteresisMeters, 30)) >= previousCandidate.distance
+        ? previousCandidate
+        : best;
+
+    this.dynamicLinkTargetByKey.set(key, selected.id);
+    return selected;
+  }
+
+  #buildDynamicLink(definition, geoByNodeId, elapsedSec, timestampIso) {
+    const from = String(definition?.from || '').trim();
+    const to = String(definition?.to || '').trim();
+    const id = String(definition?.id || '').trim();
+    if (!from || !to || !id || from === to) {
+      return null;
+    }
+
+    const fromGeo = geoByNodeId.get(from);
+    const toGeo = geoByNodeId.get(to);
+    if (!fromGeo || !toGeo) {
+      return null;
+    }
+
+    const profile = definition?.profile && typeof definition.profile === 'object'
+      ? definition.profile
+      : {};
+    const distance = distanceMeters(fromGeo, toGeo);
+    const phaseRad = toRadians(hashString(id) % 360);
+    const periodSec = Math.max(90, toFiniteNumber(profile.periodSec, 180));
+    const wave = 0.5 + (0.5 * Math.sin(((elapsedSec / periodSec) * Math.PI * 2) + phaseRad));
+
+    const bandwidthBase = Math.max(20, toFiniteNumber(profile.bandwidthMbps, 120));
+    const delayBase = Math.max(1, toFiniteNumber(profile.delayMs, 10));
+    const lossBase = clamp(toFiniteNumber(profile.lossRate, 0.01), 0.001, 0.09);
+    const utilBase = clamp(toFiniteNumber(profile.utilization, 0.42), 0.15, 0.92);
+    const snrBase = Math.max(10, toFiniteNumber(profile.snrDb, 24));
+
+    const bandwidthMbps = roundNumber(bandwidthBase * (0.9 + (0.2 * wave)), 2);
+    const delayMs = roundNumber(delayBase + (distance / 240) + (wave * 2.4), 2);
+    const lossRate = clamp(lossBase + (distance / 190000) + (wave * 0.004), 0.001, 0.12);
+    const utilization = clamp(utilBase + ((wave - 0.5) * 0.22), 0.12, 0.98);
+    const snrDb = roundNumber(Math.max(8, snrBase - (distance / 150) + (Math.cos(phaseRad + (elapsedSec / 27)) * 2)), 2);
+    const availability = clamp(1 - (lossRate * 1.15), 0.88, 0.999);
+
+    let health = 'good';
+    if (lossRate >= 0.05 || snrDb < 13) {
+      health = 'danger';
+    } else if (lossRate >= 0.02 || snrDb < 18 || utilization >= 0.82) {
+      health = 'warning';
+    }
+
+    return {
+      id,
+      from,
+      to,
+      type: String(definition?.type || 'wireless'),
+      bandwidthMbps,
+      delayMs,
+      lossRate,
+      utilization,
+      snrDb,
+      availability,
+      health,
+      state: snrDb < 8.5 ? 'down' : 'up',
+      lastUpdate: timestampIso,
+    };
+  }
+
+  #augmentTopologyWithDynamicNodes(topology) {
+    const sourceNodes = Array.isArray(topology?.nodes) ? topology.nodes : [];
+    const sourceLinks = Array.isArray(topology?.links) ? topology.links : [];
+    const sourceRelations = Array.isArray(topology?.crossLayerRelations) ? topology.crossLayerRelations : [];
+
+    const baseNodes = sourceNodes.filter((node) => !DYNAMIC_NODE_ID_SET.has(node?.id));
+    const baseLinks = sourceLinks.filter(
+      (link) => !String(link?.id || '').startsWith(DYNAMIC_LINK_ID_PREFIX)
+    );
+    const baseRelations = sourceRelations.filter(
+      (relation) => !String(relation?.id || '').startsWith(DYNAMIC_RELATION_ID_PREFIX)
+    );
+
+    const baseNodeById = new Map(baseNodes.map((node) => [node.id, node]));
+    const geoByNodeId = new Map(
+      baseNodes.map((node) => [node.id, normalizeNodeGeoForMotion(node)])
+    );
+
+    const elapsedMs = Math.max(0, Date.now() - this.dynamicMotionStartMs);
+    const steppedElapsedMs =
+      Math.floor(elapsedMs / this.dynamicMotionStepMs) * this.dynamicMotionStepMs;
+    const elapsedSec = steppedElapsedMs / 1000;
+    const timestampIso = new Date().toISOString();
+
+    const dynamicNodes = DYNAMIC_NODE_DEFS.map((nodeDef) => {
+      const preferredAnchor = baseNodeById.get(nodeDef.preferredAnchorId);
+      const anchorGeo = preferredAnchor
+        ? normalizeNodeGeoForMotion(preferredAnchor)
+        : buildVirtualAnchorGeo(nodeDef.preferredAnchorId || nodeDef.id, nodeDef.layer);
+      const orbitGeo = buildOrbitGeo(anchorGeo, nodeDef, elapsedSec);
+      geoByNodeId.set(nodeDef.id, orbitGeo);
+
+      const phaseRad = toRadians(toFiniteNumber(nodeDef.motion?.phaseDeg, 0));
+      const statusWave = Math.sin(((elapsedSec / Math.max(60, toFiniteNumber(nodeDef.motion?.periodSec, 180))) * Math.PI * 2) + phaseRad);
+      const status = statusWave > 0.78 ? 'busy' : 'normal';
+
+      return {
+        id: nodeDef.id,
+        name: nodeDef.name,
+        type: nodeDef.type,
+        layer: nodeDef.layer,
+        role: nodeDef.role,
+        campusZone: nodeDef.zone,
+        dynamic: true,
+        location: {
+          geo: orbitGeo,
+        },
+        state: {
+          online: true,
+          status,
+          lastSeen: timestampIso,
+        },
+      };
+    });
+
+    const meshCandidateIds = this.#resolveCandidateIds(baseNodes, 'mesh');
+    const accessCandidateIds = this.#resolveCandidateIds(baseNodes, 'access');
+    const backboneCandidateIds = this.#resolveCandidateIds(baseNodes, 'backbone');
+    const dynamicUavIds = dynamicNodes
+      .filter((node) => node.layer === 'mesh')
+      .map((node) => node.id);
+
+    const dynamicLinks = [];
+    const addDynamicLink = (definition) => {
+      const nextLink = this.#buildDynamicLink(definition, geoByNodeId, elapsedSec, timestampIso);
+      if (nextLink) {
+        dynamicLinks.push(nextLink);
+      }
+    };
+
+    ['MGU-001', 'MGU-002'].forEach((nodeId) => {
+      const movingGeo = geoByNodeId.get(nodeId);
+      if (!movingGeo) {
+        return;
+      }
+
+      const accessAnchor = this.#pickAnchorWithHysteresis(
+        `${nodeId}:mesh`,
+        movingGeo,
+        meshCandidateIds,
+        geoByNodeId,
+        28
+      );
+      if (accessAnchor) {
+        addDynamicLink({
+          id: `${DYNAMIC_LINK_ID_PREFIX}${nodeId}-ACCESS`,
+          from: nodeId,
+          to: accessAnchor.id,
+          type: 'wireless',
+          profile: {
+            periodSec: 160,
+            bandwidthMbps: 78,
+            delayMs: 9,
+            lossRate: 0.009,
+            utilization: 0.41,
+            snrDb: 27,
+          },
+        });
+      }
+
+      const backupUav = this.#pickAnchorWithHysteresis(
+        `${nodeId}:uav`,
+        movingGeo,
+        dynamicUavIds,
+        geoByNodeId,
+        24
+      );
+      if (backupUav) {
+        addDynamicLink({
+          id: `${DYNAMIC_LINK_ID_PREFIX}${nodeId}-BACKUP`,
+          from: nodeId,
+          to: backupUav.id,
+          type: 'wireless',
+          profile: {
+            periodSec: 190,
+            bandwidthMbps: 52,
+            delayMs: 12,
+            lossRate: 0.014,
+            utilization: 0.38,
+            snrDb: 24,
+          },
+        });
+      }
+    });
+
+    ['MUAV-001', 'MUAV-002'].forEach((nodeId) => {
+      const movingGeo = geoByNodeId.get(nodeId);
+      if (!movingGeo) {
+        return;
+      }
+
+      const groundAnchor = this.#pickAnchorWithHysteresis(
+        `${nodeId}:ground`,
+        movingGeo,
+        accessCandidateIds,
+        geoByNodeId,
+        46
+      );
+      if (groundAnchor) {
+        addDynamicLink({
+          id: `${DYNAMIC_LINK_ID_PREFIX}${nodeId}-GROUND`,
+          from: nodeId,
+          to: groundAnchor.id,
+          type: 'wireless',
+          profile: {
+            periodSec: 210,
+            bandwidthMbps: 180,
+            delayMs: 13,
+            lossRate: 0.012,
+            utilization: 0.47,
+            snrDb: 23,
+          },
+        });
+      }
+
+      const backboneAnchor = this.#pickAnchorWithHysteresis(
+        `${nodeId}:backbone`,
+        movingGeo,
+        backboneCandidateIds,
+        geoByNodeId,
+        70
+      );
+      if (backboneAnchor) {
+        addDynamicLink({
+          id: `${DYNAMIC_LINK_ID_PREFIX}${nodeId}-BACKBONE`,
+          from: nodeId,
+          to: backboneAnchor.id,
+          type: 'wireless',
+          profile: {
+            periodSec: 240,
+            bandwidthMbps: 290,
+            delayMs: 11,
+            lossRate: 0.008,
+            utilization: 0.44,
+            snrDb: 26,
+          },
+        });
+      }
+    });
+
+    if (dynamicUavIds.length >= 2) {
+      addDynamicLink({
+        id: `${DYNAMIC_LINK_ID_PREFIX}MUAV-MESH`,
+        from: dynamicUavIds[0],
+        to: dynamicUavIds[1],
+        type: 'wireless',
+        profile: {
+          periodSec: 180,
+          bandwidthMbps: 240,
+          delayMs: 10,
+          lossRate: 0.01,
+          utilization: 0.49,
+          snrDb: 25,
+        },
+      });
+    }
+
+    const mergedNodes = [...baseNodes, ...dynamicNodes];
+    const mergedNodeById = new Map(mergedNodes.map((node) => [node.id, node]));
+    const dynamicRelations = dynamicLinks
+      .map((link, index) => buildDynamicRelationFromLink(link, mergedNodeById, index + 1))
+      .filter(Boolean);
+
+    return {
+      ...topology,
+      meta: {
+        ...(topology?.meta || {}),
+        dynamicNodeCount: dynamicNodes.length,
+        dynamicLinkCount: dynamicLinks.length,
+        dynamicStepMs: this.dynamicMotionStepMs,
+      },
+      nodes: mergedNodes,
+      links: [...baseLinks, ...dynamicLinks],
+      crossLayerRelations: [...baseRelations, ...dynamicRelations],
+    };
+  }
+
   getTopology() {
     const pythonTopology = this.#loadTopologyFromPython();
     if (pythonTopology) {
-      return clone(pythonTopology);
+      const withDynamicOverlay = this.#augmentTopologyWithDynamicNodes(pythonTopology);
+      return clone(withDynamicOverlay);
     }
     if (this.fallbackRepository) {
       return this.fallbackRepository.getTopology();

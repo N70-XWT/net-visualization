@@ -1,20 +1,20 @@
 {
-  "timestamp": 1775741058915,
+  "timestamp": 1777274704636,
   "eventType": "LINK_ADD",
   "payload": {
     "link": {
-      "id": "L-A5-U-LIVE-066",
+      "id": "L-A5-U-LIVE-072",
       "from": "A5",
-      "to": "U-LIVE-066",
+      "to": "U-LIVE-072",
       "type": "wireless",
       "bandwidthMbps": 20.0,
-      "utilization": 0.241,
-      "delayMs": 10.32,
-      "lossRate": 0.0344,
-      "snrDb": 14.22,
+      "utilization": 0.383,
+      "delayMs": 8.28,
+      "lossRate": 0.0593,
+      "snrDb": 23.26,
       "health": "warning",
       "state": "up",
-      "lastUpdate": 1775741058915
+      "lastUpdate": 1777274704636
     }
   }
 }

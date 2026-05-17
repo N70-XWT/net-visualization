@@ -1,22 +1,22 @@
 {
-  "timestamp": 1775741073984,
+  "timestamp": 1777274704636,
   "eventType": "NODE_UPDATE",
   "payload": {
-    "nodeId": "U10",
+    "nodeId": "U3",
     "changes": {
       "state": {
-        "online": true,
-        "status": "busy",
-        "lastSeen": 1775741073984
+        "online": false,
+        "status": "offline",
+        "lastSeen": 1777274704636
       },
       "metrics": {
-        "cpu": 0.624,
-        "load": 0.9,
+        "cpu": 0.797,
+        "load": 0.615,
         "cache": 0.0,
-        "energy": 71.19,
+        "energy": 73.56,
         "capacity": 50
       },
-      "alarmLevel": "warning"
+      "alarmLevel": "danger"
     }
   }
 }

@@ -504,66 +504,6 @@ export function mapNodeToXduCampus(rawNode, index = 0) {
   };
 }
 
-function inferBuildingZone(name) {
-  const text = String(name || '').toLowerCase();
-  if (text.includes('network-center')) {
-    return 'network-center';
-  }
-  if (text.includes('dorm')) {
-    return 'dorm-area';
-  }
-  if (text.includes('canteen')) {
-    return 'canteen-area';
-  }
-  if (text.includes('stadium')) {
-    return 'stadium-area';
-  }
-  if (text.includes('hospital')) {
-    return 'admin-area';
-  }
-  if (text.includes('office')) {
-    return 'admin-area';
-  }
-  if (text.includes('network-security')) {
-    return 'lab-area';
-  }
-  if (/^[a-z]\s*building$/i.test(text)) {
-    return 'teaching-area';
-  }
-  if (text.includes('activity')) {
-    return 'gate-area';
-  }
-  return 'teaching-area';
-}
-
-function inferBuildingGatewayType(name) {
-  const text = String(name || '').toLowerCase();
-  if (text.includes('network-center')) {
-    return 'campus-gateway';
-  }
-  if (text.includes('network-security')) {
-    return 'edge-server';
-  }
-  return 'building-gateway';
-}
-
-function inferDeviceTypePool(name) {
-  const text = String(name || '').toLowerCase();
-  if (text.includes('dorm')) {
-    return ['dorm-device', 'access-control', 'smart-meter', 'camera', 'env-sensor'];
-  }
-  if (text.includes('canteen') || text.includes('stadium') || text.includes('activity') || text.includes('hospital')) {
-    return ['camera', 'access-control', 'smart-meter', 'env-sensor'];
-  }
-  if (text.includes('network-security')) {
-    return ['lab-terminal', 'camera', 'env-sensor', 'access-control', 'smart-meter'];
-  }
-  if (/^[a-z]\s*building$/i.test(text) || text.includes('building')) {
-    return ['classroom-terminal', 'camera', 'env-sensor', 'access-control', 'smart-meter'];
-  }
-  return ['camera', 'env-sensor', 'access-control', 'smart-meter', 'iot-device'];
-}
-
 function createNodeState(seed, core = false) {
   if (core) {
     return { online: true, status: 'normal' };
@@ -617,21 +557,6 @@ function createCampusNode({
   };
 }
 
-function createDeviceGeoAroundBuilding(buildingGeo, seed, index, total) {
-  const hash = hashString(`${seed}-${index}`);
-  const baseAngle = (index / Math.max(1, total)) * Math.PI * 2;
-  const randomAngle = ((hash % 360) / 360) * Math.PI * 2;
-  const angle = baseAngle + (randomAngle * 0.45);
-  const radius = 0.00008 + ((hash % 7) * 0.000022);
-  const latOffset = Math.sin(angle) * radius;
-  const lngOffset = Math.cos(angle) * radius;
-  return {
-    lat: roundCoord(clamp(buildingGeo.lat + latOffset, CAMPUS_LAT_RANGE.min, CAMPUS_LAT_RANGE.max)),
-    lng: roundCoord(clamp(buildingGeo.lng + lngOffset, CAMPUS_LNG_RANGE.min, CAMPUS_LNG_RANGE.max)),
-    altitude: 2 + (hash % 6),
-  };
-}
-
 function createCampusLink({
   id,
   from,
@@ -660,16 +585,25 @@ function createCampusLink({
   };
 }
 
-function buildGeneratedSouthCampusTopology() {
+function buildGeneratedSouthCampusTopology(options = {}) {
+  const { enableSynthetic = true } = options;
+  if (!enableSynthetic) {
+    return {
+      nodes: [],
+      links: [],
+      crossLayerRelations: [],
+    };
+  }
+
   const coreGeo = XDU_SOUTH_CAMPUS_SPECIAL_NODE_GEO[CAMPUS_CORE_NODE_ID] || {
     lat: XDU_CAMPUS_DEFAULT_CENTER.lat,
     lng: XDU_CAMPUS_DEFAULT_CENTER.lng,
-    altitude: 30,
+    altitude: 36,
   };
 
   const coreNode = createCampusNode({
     id: CAMPUS_CORE_NODE_ID,
-    name: 'South Campus Network Center',
+    name: 'Command Center',
     type: 'network-center',
     layer: 'backbone',
     zone: 'network-center',
@@ -680,139 +614,227 @@ function buildGeneratedSouthCampusTopology() {
     synthetic: true,
   });
 
-  const buildingNodes = XDU_SOUTH_CAMPUS_BUILDINGS_WGS84.map((building, index) => {
-    const zone = inferBuildingZone(building.name);
-    const type = inferBuildingGatewayType(building.name);
-    return createCampusNode({
-      id: building.buildingId,
-      name: building.name,
-      type,
-      layer: 'access',
-      zone,
-      geo: {
-        lat: toFiniteNumber(building.lat, XDU_CAMPUS_DEFAULT_CENTER.lat),
-        lng: toFiniteNumber(building.lng, XDU_CAMPUS_DEFAULT_CENTER.lng),
-        altitude: 14 + (index % 8),
-      },
-      role: 'building-gateway',
-      stateSeed: building.buildingId,
+  const spaceNodes = [
+    createCampusNode({
+      id: 'XDU-SAT-CORE-01',
+      name: 'Backbone Satellite',
+      type: 'campus-gateway',
+      layer: 'backbone',
+      zone: 'network-center',
+      geo: getCampusPointByZone('network-center', 'xdu-sat-core-01', 52),
+      role: 'space-backbone',
+      stateSeed: 'XDU-SAT-CORE-01',
       synthetic: true,
-    });
-  });
+    }),
+    createCampusNode({
+      id: 'XDU-SAT-REL-02',
+      name: 'Relay Satellite',
+      type: 'security-platform',
+      layer: 'backbone',
+      zone: 'admin-area',
+      geo: getCampusPointByZone('admin-area', 'xdu-sat-rel-02', 48),
+      role: 'space-relay',
+      stateSeed: 'XDU-SAT-REL-02',
+      synthetic: true,
+    }),
+  ];
 
-  const deviceNodes = [];
-  const buildingDeviceIds = {};
-  buildingNodes.forEach((buildingNode) => {
-    const pool = inferDeviceTypePool(buildingNode.name);
-    const deviceCount = 3 + (hashString(`${buildingNode.id}-device-count`) % 4); // 3~6
-    const typeSeed = hashString(`${buildingNode.id}-device-type`);
-    const currentIds = [];
-    for (let index = 0; index < deviceCount; index += 1) {
-      const deviceType = pool[(typeSeed + index) % pool.length];
-      const deviceId = `${buildingNode.id}-IOT-${String(index + 1).padStart(2, '0')}`;
-      currentIds.push(deviceId);
-      const geo = createDeviceGeoAroundBuilding(buildingNode.location.geo, buildingNode.id, index, deviceCount);
-      deviceNodes.push(createCampusNode({
-        id: deviceId,
-        name: `${buildingNode.name} ${XDU_CAMPUS_NODE_TYPE_META[deviceType]?.label || 'IoT Device'} ${String(index + 1).padStart(2, '0')}`,
-        type: deviceType,
-        layer: 'edge',
-        zone: buildingNode.campusZone,
-        geo,
-        role: deviceType,
-        stateSeed: deviceId,
-        synthetic: true,
-      }));
-    }
-    buildingDeviceIds[buildingNode.id] = currentIds;
-  });
+  const airNodes = [
+    createCampusNode({
+      id: 'XDU-UAV-REL-01',
+      name: 'UAV Relay 01',
+      type: 'edge-server',
+      layer: 'mesh',
+      zone: 'lab-area',
+      geo: getCampusPointByZone('lab-area', 'xdu-uav-rel-01', 28),
+      role: 'air-relay',
+      stateSeed: 'XDU-UAV-REL-01',
+      synthetic: true,
+    }),
+    createCampusNode({
+      id: 'XDU-UAV-GW-02',
+      name: 'UAV Gateway 02',
+      type: 'edge-server',
+      layer: 'mesh',
+      zone: 'stadium-area',
+      geo: getCampusPointByZone('stadium-area', 'xdu-uav-gw-02', 24),
+      role: 'air-gateway',
+      stateSeed: 'XDU-UAV-GW-02',
+      synthetic: true,
+    }),
+  ];
 
-  const links = [];
-  const relations = [];
+  const groundGatewayNodes = [
+    createCampusNode({
+      id: 'XDU-GND-GW-01',
+      name: 'Ground Gateway 01',
+      type: 'building-gateway',
+      layer: 'access',
+      zone: 'teaching-area',
+      geo: getCampusPointByZone('teaching-area', 'xdu-gnd-gw-01', 14),
+      role: 'ground-gateway',
+      stateSeed: 'XDU-GND-GW-01',
+      synthetic: true,
+    }),
+    createCampusNode({
+      id: 'XDU-GND-GW-02',
+      name: 'Ground Gateway 02',
+      type: 'building-gateway',
+      layer: 'access',
+      zone: 'dorm-area',
+      geo: getCampusPointByZone('dorm-area', 'xdu-gnd-gw-02', 12),
+      role: 'ground-gateway',
+      stateSeed: 'XDU-GND-GW-02',
+      synthetic: true,
+    }),
+  ];
 
-  buildingNodes.forEach((buildingNode, index) => {
-    const hash = hashString(`${buildingNode.id}-core-link`);
-    links.push(createCampusLink({
-      id: `XDU-LNK-CORE-${String(index + 1).padStart(3, '0')}`,
+  const links = [
+    createCampusLink({
+      id: 'XDU-LNK-BB-001',
       from: CAMPUS_CORE_NODE_ID,
-      to: buildingNode.id,
+      to: 'XDU-SAT-CORE-01',
       type: 'wired',
-      bandwidthMbps: 1000,
-      delayMs: 2 + (hash % 6),
-      lossRate: Number((0.001 + ((hash % 8) / 10000)).toFixed(4)),
-      utilization: Number((0.21 + ((hash % 35) / 100)).toFixed(3)),
-      snrDb: 35 + (hash % 6),
-      availability: Number((0.996 + ((hash % 3) / 1000)).toFixed(3)),
-    }));
-
-    relations.push({
-      id: `XDU-REL-CORE-${String(index + 1).padStart(3, '0')}`,
+      bandwidthMbps: 1600,
+      delayMs: 4,
+      lossRate: 0.0012,
+      utilization: 0.34,
+      snrDb: 38,
+      availability: 0.998,
+    }),
+    createCampusLink({
+      id: 'XDU-LNK-BB-002',
       from: CAMPUS_CORE_NODE_ID,
-      to: buildingNode.id,
-      relation: 'campus-core-aggregation',
-    });
-  });
-
-  buildingNodes.forEach((buildingNode) => {
-    const deviceIds = buildingDeviceIds[buildingNode.id] || [];
-    deviceIds.forEach((deviceId, index) => {
-      const hash = hashString(`${buildingNode.id}-${deviceId}-access`);
-      links.push(createCampusLink({
-        id: `XDU-LNK-ACC-${buildingNode.id}-${String(index + 1).padStart(2, '0')}`,
-        from: buildingNode.id,
-        to: deviceId,
-        type: 'wireless',
-        bandwidthMbps: 80 + (hash % 80),
-        delayMs: 5 + (hash % 18),
-        lossRate: Number((0.002 + ((hash % 12) / 1000)).toFixed(4)),
-        utilization: Number((0.12 + ((hash % 52) / 100)).toFixed(3)),
-        snrDb: 20 + (hash % 12),
-        availability: Number((0.982 + ((hash % 16) / 1000)).toFixed(3)),
-      }));
-    });
-  });
-
-  const redundancyPairSet = new Set();
-  let redundancyIndex = 1;
-  buildingNodes.forEach((buildingNode, index) => {
-    if (index % 3 !== 0) {
-      return;
-    }
-    const neighbors = buildingNodes
-      .filter((candidate) => candidate.id !== buildingNode.id)
-      .map((candidate) => ({
-        node: candidate,
-        distance: distanceSquared(buildingNode.location.geo, candidate.location.geo),
-      }))
-      .sort((left, right) => left.distance - right.distance);
-
-    const nearest = neighbors[0]?.node;
-    if (!nearest) {
-      return;
-    }
-    const pairKey = [buildingNode.id, nearest.id].sort().join('|');
-    if (redundancyPairSet.has(pairKey)) {
-      return;
-    }
-    redundancyPairSet.add(pairKey);
-    const hash = hashString(`redundancy-${pairKey}`);
-    links.push(createCampusLink({
-      id: `XDU-LNK-RED-${String(redundancyIndex).padStart(3, '0')}`,
-      from: buildingNode.id,
-      to: nearest.id,
+      to: 'XDU-SAT-REL-02',
       type: 'wired',
-      bandwidthMbps: 400,
-      delayMs: 4 + (hash % 6),
-      lossRate: Number((0.001 + ((hash % 6) / 10000)).toFixed(4)),
-      utilization: Number((0.18 + ((hash % 40) / 100)).toFixed(3)),
-      snrDb: 28 + (hash % 10),
-      availability: Number((0.99 + ((hash % 8) / 1000)).toFixed(3)),
-    }));
-    redundancyIndex += 1;
-  });
+      bandwidthMbps: 1400,
+      delayMs: 5,
+      lossRate: 0.0016,
+      utilization: 0.36,
+      snrDb: 35,
+      availability: 0.997,
+    }),
+    createCampusLink({
+      id: 'XDU-LNK-BB-003',
+      from: 'XDU-SAT-CORE-01',
+      to: 'XDU-SAT-REL-02',
+      type: 'wired',
+      bandwidthMbps: 1200,
+      delayMs: 6,
+      lossRate: 0.0021,
+      utilization: 0.41,
+      snrDb: 33,
+      availability: 0.996,
+    }),
+    createCampusLink({
+      id: 'XDU-LNK-AIR-001',
+      from: 'XDU-SAT-CORE-01',
+      to: 'XDU-UAV-REL-01',
+      type: 'wireless',
+      bandwidthMbps: 360,
+      delayMs: 11,
+      lossRate: 0.0075,
+      utilization: 0.42,
+      snrDb: 24,
+      availability: 0.988,
+    }),
+    createCampusLink({
+      id: 'XDU-LNK-AIR-002',
+      from: 'XDU-SAT-REL-02',
+      to: 'XDU-UAV-GW-02',
+      type: 'wireless',
+      bandwidthMbps: 340,
+      delayMs: 12,
+      lossRate: 0.0082,
+      utilization: 0.45,
+      snrDb: 23,
+      availability: 0.986,
+    }),
+    createCampusLink({
+      id: 'XDU-LNK-AIR-003',
+      from: 'XDU-UAV-REL-01',
+      to: 'XDU-UAV-GW-02',
+      type: 'wireless',
+      bandwidthMbps: 220,
+      delayMs: 14,
+      lossRate: 0.012,
+      utilization: 0.49,
+      snrDb: 21,
+      availability: 0.982,
+    }),
+    createCampusLink({
+      id: 'XDU-LNK-GND-001',
+      from: 'XDU-UAV-REL-01',
+      to: 'XDU-GND-GW-01',
+      type: 'wireless',
+      bandwidthMbps: 180,
+      delayMs: 15,
+      lossRate: 0.015,
+      utilization: 0.46,
+      snrDb: 20,
+      availability: 0.978,
+    }),
+    createCampusLink({
+      id: 'XDU-LNK-GND-002',
+      from: 'XDU-UAV-REL-01',
+      to: 'XDU-GND-GW-02',
+      type: 'wireless',
+      bandwidthMbps: 170,
+      delayMs: 17,
+      lossRate: 0.017,
+      utilization: 0.43,
+      snrDb: 19,
+      availability: 0.976,
+    }),
+    createCampusLink({
+      id: 'XDU-LNK-GND-003',
+      from: 'XDU-UAV-GW-02',
+      to: 'XDU-GND-GW-02',
+      type: 'wireless',
+      bandwidthMbps: 190,
+      delayMs: 16,
+      lossRate: 0.014,
+      utilization: 0.47,
+      snrDb: 20,
+      availability: 0.979,
+    }),
+    createCampusLink({
+      id: 'XDU-LNK-GND-004',
+      from: 'XDU-UAV-GW-02',
+      to: 'XDU-GND-GW-01',
+      type: 'wireless',
+      bandwidthMbps: 160,
+      delayMs: 18,
+      lossRate: 0.018,
+      utilization: 0.44,
+      snrDb: 18,
+      availability: 0.974,
+    }),
+    createCampusLink({
+      id: 'XDU-LNK-GND-005',
+      from: 'XDU-GND-GW-01',
+      to: 'XDU-GND-GW-02',
+      type: 'wired',
+      bandwidthMbps: 600,
+      delayMs: 8,
+      lossRate: 0.003,
+      utilization: 0.38,
+      snrDb: 30,
+      availability: 0.992,
+    }),
+  ];
+
+  const relations = [
+    { id: 'XDU-REL-001', from: CAMPUS_CORE_NODE_ID, to: 'XDU-SAT-CORE-01', relation: 'campus-core-aggregation' },
+    { id: 'XDU-REL-002', from: CAMPUS_CORE_NODE_ID, to: 'XDU-SAT-REL-02', relation: 'campus-core-aggregation' },
+    { id: 'XDU-REL-003', from: 'XDU-SAT-CORE-01', to: 'XDU-UAV-REL-01', relation: 'space-air-relay' },
+    { id: 'XDU-REL-004', from: 'XDU-SAT-REL-02', to: 'XDU-UAV-GW-02', relation: 'space-air-relay' },
+    { id: 'XDU-REL-005', from: 'XDU-UAV-REL-01', to: 'XDU-GND-GW-01', relation: 'air-ground-access' },
+    { id: 'XDU-REL-006', from: 'XDU-UAV-GW-02', to: 'XDU-GND-GW-02', relation: 'air-ground-access' },
+  ];
 
   return {
-    nodes: [coreNode, ...buildingNodes, ...deviceNodes],
+    nodes: [coreNode, ...spaceNodes, ...airNodes, ...groundGatewayNodes],
     links,
     crossLayerRelations: relations,
   };
@@ -842,7 +864,11 @@ export function applyXduCampusPreset(topology) {
   const sourceLinks = Array.isArray(source.links) ? source.links : [];
   const sourceRelations = Array.isArray(source.crossLayerRelations) ? source.crossLayerRelations : [];
 
-  const generatedTopology = buildGeneratedSouthCampusTopology();
+  // Keep demo node count in a presentation-friendly range:
+  // when source topology already has enough nodes, skip synthetic expansion.
+  const generatedTopology = buildGeneratedSouthCampusTopology({
+    enableSynthetic: sourceNodes.length < 12,
+  });
   const generatedNodes = generatedTopology.nodes;
   const generatedLinks = generatedTopology.links;
   const generatedRelations = generatedTopology.crossLayerRelations;

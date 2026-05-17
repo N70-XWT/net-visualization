@@ -1,29 +1,29 @@
 {
-  "timestamp": 1775741058915,
+  "timestamp": 1777274704636,
   "eventType": "NODE_ADD",
   "payload": {
     "node": {
-      "id": "U-LIVE-066",
-      "name": "Live-Terminal-66",
+      "id": "U-LIVE-072",
+      "name": "Live-Terminal-72",
       "type": "terminal",
       "layer": "access",
       "location": {
         "geo": {
-          "lat": 34.234079,
-          "lng": 108.918791,
+          "lat": 34.23431,
+          "lng": 109.072471,
           "altitude": 0
         }
       },
       "state": {
         "online": true,
         "status": "online",
-        "lastSeen": 1775741058915
+        "lastSeen": 1777274704636
       },
       "metrics": {
-        "cpu": 0.167,
-        "load": 0.116,
+        "cpu": 0.087,
+        "load": 0.252,
         "cache": 0.0,
-        "energy": 50.36,
+        "energy": 62.97,
         "capacity": 50.0
       },
       "role": "user",
